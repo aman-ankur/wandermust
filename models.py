@@ -1,6 +1,7 @@
 from __future__ import annotations
+import operator
 from pydantic import BaseModel
-from typing import TypedDict
+from typing import Annotated, Dict, List, Optional, Tuple, TypedDict
 
 class CandidateWindow(BaseModel):
     start: str
@@ -45,15 +46,15 @@ class RankedWindow(BaseModel):
 class TravelState(TypedDict, total=False):
     destination: str
     origin: str
-    date_range: tuple[str, str]
+    date_range: Tuple[str, str]
     duration_days: int
     num_travelers: int
-    budget_max: float | None
-    priorities: dict[str, float]
-    candidate_windows: list[dict]
-    weather_data: list[dict]
-    flight_data: list[dict]
-    hotel_data: list[dict]
-    ranked_windows: list[dict]
+    budget_max: Optional[float]
+    priorities: Dict[str, float]
+    candidate_windows: List[dict]
+    weather_data: List[dict]
+    flight_data: List[dict]
+    hotel_data: List[dict]
+    ranked_windows: List[dict]
     recommendation: str
-    errors: list[str]
+    errors: Annotated[List[str], operator.add]
