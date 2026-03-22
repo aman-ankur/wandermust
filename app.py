@@ -8,6 +8,9 @@ st.title("Travel Optimizer")
 st.caption("Find the best time to visit any destination")
 
 with st.sidebar:
+    demo_mode = st.toggle("🎭 Demo Mode", value=False, help="Use simulated data instead of live API calls")
+    if demo_mode:
+        st.info("Using simulated data — no API keys needed", icon="🎭")
     st.header("Trip Details")
     destination = st.text_input("Destination", placeholder="Tokyo, Japan")
     origin = st.text_input("Origin", value=settings.default_origin)
@@ -36,7 +39,7 @@ if search:
             "priorities": {"weather": w_weather/total_w, "flights": w_flights/total_w, "hotels": w_hotels/total_w},
             "errors": []}
         with st.spinner("Searching..."):
-            result = build_graph().invoke(state)
+            result = build_graph(demo=demo_mode).invoke(state)
         if result.get("errors"):
             with st.expander("Warnings", expanded=False):
                 for e in result["errors"]: st.warning(e)
