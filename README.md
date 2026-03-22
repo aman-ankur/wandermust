@@ -1,88 +1,177 @@
-# Travel Optimizer
+# Wandermust 🌍✈️
 
-Find the best time to visit any destination — based on weather, flights, and hotels.
+**AI-powered travel timing optimizer** — Find the perfect time to visit any destination by analyzing weather patterns, flight prices, and hotel costs across multiple date windows.
 
-Built with LangGraph (multi-agent orchestration), Streamlit (UI), Amadeus API (flights + hotels), and Open-Meteo (weather + geocoding).
+Built with **LangGraph** (multi-agent orchestration), **Streamlit** (UI), **Amadeus API** (flights + hotels), and **Open-Meteo** (weather).
 
-## Implementation Status
+---
 
-All 14 tasks complete. **41 tests passing.**
+## ✨ Features
 
-| # | Task | Status | Files |
-|---|------|--------|-------|
-| 1 | Project Scaffolding | Done | `config.py`, `models.py`, `.gitignore`, `requirements.txt`, `.env.example` |
-| 2 | Geocoding Service | Done | `services/geocoding.py` |
-| 3 | Cache + SQLite Store | Done | `cache.py`, `db.py` |
-| 4 | Weather Client | Done | `services/weather_client.py` |
-| 5 | Amadeus Client | Done | `services/amadeus_client.py` |
-| 6 | Supervisor Agent | Done | `agents/supervisor.py` |
-| 7 | Weather Agent | Done | `agents/weather.py` |
-| 8 | Flights Agent | Done | `agents/flights.py` |
-| 9 | Hotels Agent | Done | `agents/hotels.py` |
-| 10 | Scorer Agent | Done | `agents/scorer.py` |
-| 11 | Synthesizer Agent | Done | `agents/synthesizer.py` |
-| 12 | LangGraph Wiring | Done | `graph.py` |
-| 13 | Streamlit UI | Done | `app.py` |
-| 14 | README | Done | `README.md` |
+- 🤖 **Multi-agent AI system** — 6 specialized agents working in parallel
+- 🌤️ **Weather analysis** — Climate data and historical patterns
+- ✈️ **Flight price tracking** — Real-time pricing from Amadeus
+- 🏨 **Hotel cost analysis** — Accommodation pricing trends
+- 📊 **Smart scoring** — Weighted ranking based on your priorities
+- 💾 **Historical fallback** — SQLite cache when APIs are unavailable
+- 🎨 **Beautiful UI** — Interactive Streamlit dashboard with charts
 
-## Setup
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Python 3.11+
+- [Amadeus API credentials](https://developers.amadeus.com) (free tier: 500 calls/month)
+- [OpenRouter API key](https://openrouter.ai) (for AI recommendations)
+
+### Installation
 
 ```bash
-cd travel-optimizer
-python3 -m venv .venv && source .venv/bin/activate
+# Clone the repository
+git clone https://github.com/aman-ankur/wandermust.git
+cd wandermust
+
+# Create virtual environment
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
-cp .env.example .env  # add your API keys
+
+# Configure API keys
+cp .env.example .env
+# Edit .env and add your API keys
 ```
 
-### Required API Keys
-
-| Key | Source | Notes |
-|-----|--------|-------|
-| `AMADEUS_CLIENT_ID` | [developers.amadeus.com](https://developers.amadeus.com) | Free tier: 500 calls/month |
-| `AMADEUS_CLIENT_SECRET` | Same as above | |
-| `OPENROUTER_API_KEY` | [openrouter.ai](https://openrouter.ai) | For LLM synthesis |
-
-## Run
+### Run
 
 ```bash
 streamlit run app.py
 ```
 
-## Test
+Open your browser to `http://localhost:8501`
+
+---
+
+## 🧪 Testing
 
 ```bash
 pytest tests/ -v
 ```
 
-## Architecture
+**41 tests passing** across all agents and services.
+
+---
+
+## 🏗️ Architecture
 
 ```
-User → Supervisor → [Weather | Flights | Hotels] parallel → Scorer → Synthesizer → UI
+User Input (Streamlit)
+    ↓
+Supervisor Agent (generates candidate date windows)
+    ↓
+┌─────────────┬─────────────┬─────────────┐
+│   Weather   │   Flights   │   Hotels    │  ← Parallel execution
+│    Agent    │    Agent    │    Agent    │
+└─────────────┴─────────────┴─────────────┘
+    ↓
+Scorer Agent (normalizes & ranks)
+    ↓
+Synthesizer Agent (AI recommendation)
+    ↓
+Results Display
 ```
 
-### Agents
+### Agent Roles
 
-- **Supervisor** — Parses input, generates rolling candidate date windows
-- **Weather Agent** — Fetches Open-Meteo climate/historical data, scores by temp/rain/humidity
-- **Flights Agent** — Queries Amadeus Flight Offers, falls back to SQLite history
-- **Hotels Agent** — Queries Amadeus Hotel Offers, falls back to SQLite history
-- **Scorer** — Normalizes all data 0–1, applies user priority weights, ranks windows
-- **Synthesizer** — LLM-generated recommendation via OpenRouter (falls back to raw data on failure)
+| Agent | Purpose | Data Source |
+|-------|---------|-------------|
+| **Supervisor** | Generates rolling date windows from user input | Logic-based |
+| **Weather** | Scores weather conditions (temp, rain, humidity) | Open-Meteo (free) |
+| **Flights** | Finds cheapest flight prices | Amadeus API |
+| **Hotels** | Calculates average nightly rates | Amadeus API |
+| **Scorer** | Normalizes data & applies priority weights | Internal |
+| **Synthesizer** | Generates natural language recommendations | OpenRouter LLM |
 
-### Services
+---
 
-- **Geocoding** — City name → lat/lon via Open-Meteo (free, no key)
-- **Weather Client** — Climate API (future dates) / Historical API (past dates)
-- **Amadeus Client** — OAuth2 token management, flight search, hotel search, IATA lookup
+## 🛠️ Tech Stack
 
-### Data Layer
+- **LangGraph** — Multi-agent orchestration with parallel execution
+- **Streamlit** — Interactive web UI
+- **Amadeus API** — Flight and hotel data
+- **Open-Meteo** — Weather and geocoding (free, no key required)
+- **OpenRouter** — LLM for recommendations
+- **SQLite** — Historical data fallback
+- **Pydantic** — Data validation
+- **pytest** — Testing
 
-- **TTL Cache** — In-memory cache (24h default) to avoid redundant API calls
-- **SQLite History** — Stores flight/hotel prices for historical fallback when APIs fail
+---
 
-### Key Design Decisions
+## 📖 Documentation
 
-- LangGraph parallel fan-out for weather/flights/hotels (concurrent data fetching)
-- `Annotated[List[str], operator.add]` reducer on `errors` field for safe concurrent writes
-- `typing.Optional`/`Tuple`/`List`/`Dict` in `TravelState` for Python 3.9 compatibility with LangGraph's `get_type_hints()`
-- Scorer reweights priorities automatically when a data dimension is missing
+- **[Build Guide](docs/BUILD_GUIDE.md)** — Complete implementation guide
+- **[Implementation Plan](docs/superpowers/plans/2026-03-22-travel-optimizer-plan.md)** — Task-by-task breakdown
+- **[Learning Guide](docs/learning/)** — AI agents fundamentals
+
+---
+
+## 🎯 Example Usage
+
+1. Enter destination: "Tokyo, Japan"
+2. Set date range: June 1 - September 30, 2026
+3. Choose trip duration: 7 days
+4. Adjust priorities: Weather 40%, Flights 30%, Hotels 30%
+5. Click "Find Best Time"
+6. Get AI-powered recommendations with ranked date windows
+
+---
+
+## 🔑 Configuration
+
+Edit `.env` with your API credentials:
+
+```env
+# Amadeus API (https://developers.amadeus.com)
+AMADEUS_CLIENT_ID=your_client_id
+AMADEUS_CLIENT_SECRET=your_client_secret
+
+# LLM via OpenRouter (https://openrouter.ai)
+OPENROUTER_API_KEY=your_key
+OPENROUTER_MODEL=anthropic/claude-sonnet-4-20250514
+
+# Defaults
+DEFAULT_ORIGIN=Bangalore
+DEFAULT_CURRENCY=INR
+```
+
+---
+
+## 🚧 Roadmap
+
+- [ ] Add multiple flight data sources (Kiwi, Skyscanner)
+- [ ] Price trend visualization over time
+- [ ] Budget ceiling filtering
+- [ ] Multi-destination comparison
+- [ ] Async API calls for faster execution
+- [ ] Deploy to Streamlit Cloud
+
+---
+
+## 📝 License
+
+MIT
+
+---
+
+## 🤝 Contributing
+
+Contributions welcome! This project is a great learning resource for:
+- Multi-agent AI systems
+- LangGraph orchestration
+- API integration patterns
+- Production-ready error handling
+
+See `docs/learning/` for AI agent fundamentals.
