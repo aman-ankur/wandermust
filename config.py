@@ -1,9 +1,10 @@
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    amadeus_client_id: str = ""
-    amadeus_client_secret: str = ""
+    serpapi_api_key: str = ""
+    openai_api_key: str = ""
     openrouter_api_key: str = ""
+    llm_model: str = "gpt-4o"
     openrouter_model: str = "anthropic/claude-sonnet-4-20250514"
     default_origin: str = "Bangalore"
     default_currency: str = "INR"
@@ -15,8 +16,8 @@ class Settings(BaseSettings):
     reddit_client_id: str = ""
     reddit_client_secret: str = ""
     reddit_user_agent: str = "wandermust-travel-optimizer/1.0"
-    social_extraction_model: str = "anthropic/claude-haiku-3.5"
-    discovery_model: str = "anthropic/claude-sonnet-4-20250514"
+    social_extraction_model: str = "gpt-4o-mini"
+    discovery_model: str = "gpt-4o"
     max_onboarding_questions: int = 5
     max_discovery_questions: int = 5
 
