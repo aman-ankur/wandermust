@@ -10,6 +10,7 @@ from mock_data import (
     get_mock_flight_price,
     get_mock_hotel_price,
     get_mock_recommendation,
+    get_mock_social_insights,
 )
 from config import settings
 
@@ -74,3 +75,35 @@ def mock_synthesizer_node(state: TravelState) -> dict:
     origin = state.get("origin", "your city")
     recommendation = get_mock_recommendation(destination, origin, ranked)
     return {"recommendation": recommendation, "errors": []}
+
+
+def mock_social_node(state: TravelState) -> dict:
+    """Mock social agent — returns destination-aware simulated insights."""
+    from datetime import date as _date
+    destination = state["destination"]
+    windows = state["candidate_windows"]
+    insights_data = get_mock_social_insights(destination, windows[0]["start"])
+    social_data = []
+    for w in windows:
+        month = _date.fromisoformat(w["start"]).month
+        score = insights_data["timing_score"]
+        best = insights_data.get("best_months", [])
+        if best and month in best:
+            score = min(1.0, score + 0.1)
+        elif best:
+            score = max(0.0, score - 0.1)
+        social_data.append({
+            "window_start": w["start"],
+            "window_end": w["end"],
+            "social_score": round(score, 3),
+        })
+    social_insights = [{
+        "destination": destination,
+        "timing_score": insights_data["timing_score"],
+        "crowd_level": insights_data["crowd_level"],
+        "events": insights_data["events"],
+        "itinerary_tips": insights_data["itinerary_tips"],
+        "sentiment": insights_data["sentiment"],
+        "sources": [],
+    }]
+    return {"social_data": social_data, "social_insights": social_insights, "errors": []}

@@ -38,6 +38,7 @@ class RankedWindow(BaseModel):
     weather_score: float
     flight_score: float
     hotel_score: float
+    social_score: float = 0.0
     total_score: float
     estimated_flight_cost: float = 0.0
     estimated_hotel_cost: float = 0.0
@@ -55,6 +56,8 @@ class TravelState(TypedDict, total=False):
     weather_data: List[dict]
     flight_data: List[dict]
     hotel_data: List[dict]
+    social_data: List[dict]
+    social_insights: List[dict]
     ranked_windows: List[dict]
     recommendation: str
     errors: Annotated[List[str], operator.add]

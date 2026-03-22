@@ -11,6 +11,11 @@ class Settings(BaseSettings):
     cache_ttl_seconds: int = 86400
     api_timeout_seconds: int = 10
     api_max_retries: int = 3
+    tavily_api_key: str = ""
+    reddit_client_id: str = ""
+    reddit_client_secret: str = ""
+    reddit_user_agent: str = "wandermust-travel-optimizer/1.0"
+    social_extraction_model: str = "anthropic/claude-haiku-3.5"
 
     class Config:
         env_file = ".env"

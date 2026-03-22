@@ -9,9 +9,9 @@ st.title("Travel Optimizer")
 st.caption("Find the best time to visit any destination")
 
 # --- Agent pipeline diagram ---
-PIPELINE_STEPS = ["Supervisor", "Weather", "Flights", "Hotels", "Scorer", "Synthesizer"]
+PIPELINE_STEPS = ["Supervisor", "Weather", "Flights", "Hotels", "Social", "Scorer", "Synthesizer"]
 STEP_ICONS = {"Supervisor": "📋", "Weather": "🌤️", "Flights": "✈️",
-              "Hotels": "🏨", "Scorer": "📊", "Synthesizer": "✍️"}
+              "Hotels": "🏨", "Social": "🔍", "Scorer": "📊", "Synthesizer": "✍️"}
 
 def render_pipeline(active="", completed=None):
     """Render a horizontal agent pipeline with status indicators."""
@@ -47,7 +47,8 @@ with st.sidebar:
     st.header("Priorities")
     w_weather = st.slider("Weather", 0.0, 1.0, 0.4, 0.05)
     w_flights = st.slider("Flight cost", 0.0, 1.0, 0.3, 0.05)
-    w_hotels = st.slider("Hotel cost", 0.0, 1.0, 0.3, 0.05)
+    w_hotels = st.slider("Hotel cost", 0.0, 1.0, 0.25, 0.05)
+    w_social = st.slider("Social insights", 0.0, 1.0, 0.15, 0.05)
     search = st.button("Find Best Time", type="primary", use_container_width=True)
 
 # --- Main area ---
@@ -55,13 +56,14 @@ if search:
     if not destination:
         st.error("Enter a destination.")
     else:
-        total_w = w_weather + w_flights + w_hotels or 1.0
+        total_w = w_weather + w_flights + w_hotels + w_social or 1.0
         state = {
             "destination": destination, "origin": origin,
             "date_range": (start_date.isoformat(), end_date.isoformat()),
             "duration_days": duration, "num_travelers": travelers,
             "budget_max": budget if budget > 0 else None,
-            "priorities": {"weather": w_weather/total_w, "flights": w_flights/total_w, "hotels": w_hotels/total_w},
+            "priorities": {"weather": w_weather/total_w, "flights": w_flights/total_w,
+                          "hotels": w_hotels/total_w, "social": w_social/total_w},
             "errors": []}
 
         # --- Agent execution with live logging ---
@@ -81,12 +83,14 @@ if search:
                 mock_weather_node as weather_fn,
                 mock_flights_node as flights_fn,
                 mock_hotels_node as hotels_fn,
+                mock_social_node as social_fn,
                 mock_synthesizer_node as synth_fn,
             )
         else:
             from agents.weather import weather_node as weather_fn
             from agents.flights import flights_node as flights_fn
             from agents.hotels import hotels_node as hotels_fn
+            from agents.social import social_node as social_fn
             from agents.synthesizer import synthesizer_node as synth_fn
 
         completed = set()
@@ -140,6 +144,20 @@ if search:
         n_hotels = len(state.get("hotel_data", []))
         log(f"**Hotels** → Got rates for **{n_hotels}/{n_windows} windows** ({time.time()-t0:.1f}s)")
         completed.add("Hotels")
+        with log_area.container():
+            with st.expander("🔍 Agent Execution Log", expanded=True):
+                st.markdown("\n\n".join(log_lines))
+
+        with pipeline_area.container():
+            render_pipeline(active="Social", completed=completed)
+        log("**Social** → Crawling Twitter & Reddit for insights...")
+        t0 = time.time()
+        soc_result = social_fn(state)
+        state.update(soc_result)
+        n_social = len(state.get("social_data", []))
+        n_tips = len(state.get("social_insights", [{}])[0].get("itinerary_tips", [])) if state.get("social_insights") else 0
+        log(f"**Social** → Got data for **{n_social}/{n_windows} windows**, **{n_tips} tips** ({time.time()-t0:.1f}s)")
+        completed.add("Social")
         with log_area.container():
             with st.expander("🔍 Agent Execution Log", expanded=True):
                 st.markdown("\n\n".join(log_lines))
@@ -198,9 +216,30 @@ if search:
                         + (" (estimated)" if r.get("has_historical_data") else ""))
             st.header("📈 Comparison")
             df = pd.DataFrame([{"Window": r["window"]["start"], "Weather": r["weather_score"],
-                "Flights": r["flight_score"], "Hotels": r["hotel_score"], "Total": r["total_score"],
+                "Flights": r["flight_score"], "Hotels": r["hotel_score"],
+                "Social": r.get("social_score", 0.0), "Total": r["total_score"],
                 "Flight Cost": r["estimated_flight_cost"], "Hotel/Night": r["estimated_hotel_cost"]} for r in ranked]).set_index("Window")
-            t1, t2, t3 = st.tabs(["Scores", "Flight Prices", "Hotel Prices"])
-            with t1: st.bar_chart(df[["Weather", "Flights", "Hotels", "Total"]])
+            t1, t2, t3, t4 = st.tabs(["Scores", "Flight Prices", "Hotel Prices", "Social Insights"])
+            with t1: st.bar_chart(df[["Weather", "Flights", "Hotels", "Social", "Total"]])
             with t2: st.line_chart(df["Flight Cost"])
             with t3: st.line_chart(df["Hotel/Night"])
+            with t4:
+                insights = state.get("social_insights", [])
+                if insights:
+                    si = insights[0]
+                    st.subheader(f"Crowd Level: {si.get('crowd_level', 'unknown').title()}")
+                    st.write(f"**Traveler sentiment:** {si.get('sentiment', 'N/A')}")
+                    if si.get("events"):
+                        st.subheader("Upcoming Events")
+                        for event in si["events"]:
+                            st.write(f"- **{event.get('name', '')}** — {event.get('period', '')}")
+                    if si.get("itinerary_tips"):
+                        st.subheader("Itinerary Tips from Travelers")
+                        for tip in si["itinerary_tips"]:
+                            st.write(f"- {tip.get('tip', '')} *(via {tip.get('source', 'social media')})*")
+                    if si.get("sources"):
+                        with st.expander("Sources"):
+                            for src in si["sources"][:5]:
+                                st.write(f"- [{src.get('title', 'Link')}]({src.get('url', '#')}) ({src.get('platform', '')})")
+                else:
+                    st.info("No social insights available for this search.")
