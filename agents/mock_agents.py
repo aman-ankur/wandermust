@@ -81,7 +81,9 @@ def mock_social_node(state: TravelState) -> dict:
     """Mock social agent — returns destination-aware simulated insights."""
     from datetime import date as _date
     destination = state["destination"]
-    windows = state["candidate_windows"]
+    windows = state.get("candidate_windows", [])
+    if not windows:
+        return {"social_data": [], "social_insights": [], "errors": []}
     insights_data = get_mock_social_insights(destination, windows[0]["start"])
     social_data = []
     for w in windows:
