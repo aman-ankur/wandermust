@@ -108,7 +108,7 @@ def search_destination(destination: str, month: str) -> List[dict]:
 def search_subreddits(
     destination: str,
     subreddits: List[str] = ["travel", "solotravel", "TravelHacks"],
-    time_filter: str = "year",  # last 2 years
+    time_filter: str = "year",  # PRAW max is 1 year
     limit: int = 10
 ) -> List[dict]:
     """Search Reddit for travel posts about a destination.
@@ -152,18 +152,20 @@ def social_node(state: TravelState) -> dict:
 
 #### `models.py`
 - Add `social_data` and `social_insights` fields to `TravelState`
+- Add `social_score` field to `RankedWindow` model
 
 #### `graph.py`
 - Add `social_node` to the parallel fan-out after supervisor
 - Wire social_node → scorer (alongside weather, flights, hotels)
 
 #### `agents/scorer.py`
-- Add `social` as 4th scoring dimension
+- Add `social` as 4th scoring dimension using `social_data` (per-window scores)
+- Update default priorities: `{"weather": 0.35, "flights": 0.25, "hotels": 0.25, "social": 0.15}`
 - Existing weight redistribution logic handles missing social data automatically
 - Normalization: social_score already 0-1, no transformation needed
 
 #### `agents/synthesizer.py`
-- Update prompt to include social_insights (events, crowd levels, itinerary tips)
+- Update prompt to include `social_insights` (destination-level: events, crowd levels, itinerary tips)
 - LLM weaves social context into natural language recommendation
 
 #### `agents/mock_agents.py`
