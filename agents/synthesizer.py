@@ -30,6 +30,23 @@ def synthesizer_node(state: TravelState) -> dict:
         f"{state.get('origin', 'your city')} to {state.get('destination', 'the destination')}, "
         f"write a concise recommendation (3-5 sentences) about which dates are best and why. "
         f"Mention weather, flight cost, and hotel cost. If data is estimated from history, note that.\n\n{data_summary}")
+
+    # Enrich with social insights if available
+    social_insights = state.get("social_insights", [])
+    if social_insights:
+        si = social_insights[0]
+        social_section = "\n\nSocial media insights from travelers:"
+        if si.get("crowd_level"):
+            social_section += f"\n- Crowd level: {si['crowd_level']}"
+        if si.get("sentiment"):
+            social_section += f"\n- Traveler sentiment: {si['sentiment']}"
+        for event in si.get("events", [])[:3]:
+            social_section += f"\n- Event: {event.get('name', '')} ({event.get('period', '')})"
+        for tip in si.get("itinerary_tips", [])[:5]:
+            social_section += f"\n- Tip: {tip.get('tip', '')} (via {tip.get('source', 'social media')})"
+        social_section += "\n\nIncorporate these social insights into your recommendation — mention crowd levels, events, and include 2-3 itinerary tips."
+        prompt += social_section
+
     try:
         response = _get_llm().invoke(prompt)
         return {"recommendation": response.content, "errors": errors}

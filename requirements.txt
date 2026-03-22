@@ -9,3 +9,5 @@ python-dotenv>=1.0.0
 pytest>=8.0.0
 pytest-asyncio>=0.24.0
 eval_type_backport>=0.2.0
+tavily-python>=0.3.0
+praw>=7.7.0
