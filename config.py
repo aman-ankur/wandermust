@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     reddit_client_secret: str = ""
     reddit_user_agent: str = "wandermust-travel-optimizer/1.0"
     social_extraction_model: str = "anthropic/claude-haiku-3.5"
+    discovery_model: str = "anthropic/claude-sonnet-4-20250514"
+    max_onboarding_questions: int = 5
+    max_discovery_questions: int = 5
 
     class Config:
         env_file = ".env"
