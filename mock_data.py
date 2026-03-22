@@ -195,7 +195,123 @@ def get_mock_hotel_price(destination: str, start_date: str) -> dict:
     return {"avg_nightly": avg_nightly}
 
 
-def get_mock_recommendation(destination: str, origin: str, ranked: list[dict]) -> str:
+SOCIAL_PRESETS = {
+    "tokyo": {
+        "timing_score": 0.85,
+        "crowd_level": "high",
+        "events": [
+            {"name": "Cherry Blossom Season", "period": "late March - mid April"},
+            {"name": "Tanabata Festival", "period": "July 7"},
+            {"name": "Autumn Leaves", "period": "mid November - early December"},
+        ],
+        "itinerary_tips": [
+            {"tip": "Visit Fushimi Inari at sunrise to avoid crowds", "source": "reddit"},
+            {"tip": "Get a 7-day JR Pass for day trips to Kyoto and Osaka", "source": "reddit"},
+            {"tip": "Tsukiji outer market is better than Toyosu for tourists", "source": "twitter"},
+        ],
+        "sentiment": "highly recommended",
+        "best_months": [3, 4, 10, 11],
+    },
+    "paris": {
+        "timing_score": 0.80,
+        "crowd_level": "high",
+        "events": [
+            {"name": "Bastille Day", "period": "July 14"},
+            {"name": "Paris Fashion Week", "period": "late September"},
+        ],
+        "itinerary_tips": [
+            {"tip": "Skip the Eiffel Tower queue — book Montparnasse Tower instead", "source": "reddit"},
+            {"tip": "Walk along Canal Saint-Martin for local vibe", "source": "twitter"},
+        ],
+        "sentiment": "highly recommended",
+        "best_months": [4, 5, 6, 9, 10],
+    },
+    "bangkok": {
+        "timing_score": 0.75,
+        "crowd_level": "moderate",
+        "events": [
+            {"name": "Songkran Water Festival", "period": "April 13-15"},
+            {"name": "Loy Krathong", "period": "November full moon"},
+        ],
+        "itinerary_tips": [
+            {"tip": "Take the Chao Phraya Express boat instead of taxis", "source": "reddit"},
+            {"tip": "Visit temples before 9am to beat the heat", "source": "reddit"},
+        ],
+        "sentiment": "recommended",
+        "best_months": [11, 12, 1, 2],
+    },
+    "bali": {
+        "timing_score": 0.80,
+        "crowd_level": "moderate",
+        "events": [
+            {"name": "Nyepi (Day of Silence)", "period": "March"},
+            {"name": "Galungan Festival", "period": "varies"},
+        ],
+        "itinerary_tips": [
+            {"tip": "Rent a scooter — it's the best way to explore", "source": "reddit"},
+            {"tip": "Uluwatu temple sunset is unmissable", "source": "twitter"},
+        ],
+        "sentiment": "highly recommended",
+        "best_months": [5, 6, 7, 8, 9],
+    },
+    "dubai": {
+        "timing_score": 0.70,
+        "crowd_level": "moderate",
+        "events": [
+            {"name": "Dubai Shopping Festival", "period": "January - February"},
+            {"name": "Dubai Food Festival", "period": "February - March"},
+        ],
+        "itinerary_tips": [
+            {"tip": "Visit the desert safari at sunset, not midday", "source": "reddit"},
+            {"tip": "Friday brunch is a Dubai institution — book ahead", "source": "twitter"},
+        ],
+        "sentiment": "recommended",
+        "best_months": [11, 12, 1, 2, 3],
+    },
+}
+
+
+def get_mock_social_insights(destination: str, start_date: str) -> dict:
+    """Generate mock social media insights for a destination."""
+    month = date.fromisoformat(start_date).month
+    preset = None
+    dest_lower = destination.lower()
+    for key, data in SOCIAL_PRESETS.items():
+        if key in dest_lower:
+            preset = data
+            break
+
+    if preset:
+        timing_score = preset["timing_score"]
+        best_months = preset.get("best_months", [])
+        if best_months and month in best_months:
+            timing_score = min(1.0, timing_score + 0.1)
+        elif best_months:
+            timing_score = max(0.0, timing_score - 0.1)
+        return {
+            "timing_score": round(timing_score, 2),
+            "crowd_level": preset["crowd_level"],
+            "events": preset["events"],
+            "itinerary_tips": preset["itinerary_tips"],
+            "sentiment": preset["sentiment"],
+            "best_months": best_months,
+        }
+    else:
+        seed = _hash_seed(destination)
+        rng = random.Random(seed)
+        return {
+            "timing_score": round(rng.uniform(0.4, 0.8), 2),
+            "crowd_level": rng.choice(["low", "moderate", "high"]),
+            "events": [],
+            "itinerary_tips": [
+                {"tip": f"Explore local markets in {destination}", "source": "reddit"},
+            ],
+            "sentiment": "recommended",
+            "best_months": [],
+        }
+
+
+def get_mock_recommendation(destination: str, origin: str, ranked: list) -> str:
     """Generate a static recommendation string without LLM."""
     if not ranked:
         return "No data available for a recommendation."

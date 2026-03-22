@@ -17,11 +17,35 @@ def test_graph_e2e_mocked():
          patch("agents.flights._get_client", return_value=mock_client), \
          patch("agents.hotels._get_client", return_value=mock_client), \
          patch("agents.synthesizer._get_llm", return_value=mock_llm), \
-         patch("agents.flights.HistoryDB"), patch("agents.hotels.HistoryDB"):
+         patch("agents.flights.HistoryDB"), patch("agents.hotels.HistoryDB"), \
+         patch("agents.social.search_destination", return_value=[]), \
+         patch("agents.social.search_subreddits", return_value=[]), \
+         patch("agents.social.HistoryDB") as mock_social_db:
+        mock_social_db.return_value.get_social.return_value = None
         result = build_graph().invoke({
             "destination": "Tokyo", "origin": "Bangalore",
             "date_range": ("2026-07-01", "2026-07-28"), "duration_days": 7,
             "num_travelers": 1, "budget_max": None,
-            "priorities": {"weather": 0.4, "flights": 0.3, "hotels": 0.3}, "errors": []})
+            "priorities": {"weather": 0.35, "flights": 0.25, "hotels": 0.25, "social": 0.15}, "errors": []})
     assert len(result["ranked_windows"]) > 0
     assert len(result["recommendation"]) > 0
+
+def test_demo_graph_includes_social():
+    """Demo graph should include social node and produce social data."""
+    g = build_graph(demo=True)
+    result = g.invoke({
+        "destination": "Tokyo",
+        "origin": "Bangalore",
+        "date_range": ("2026-07-01", "2026-07-28"),
+        "duration_days": 7,
+        "num_travelers": 1,
+        "budget_max": None,
+        "priorities": {"weather": 0.35, "flights": 0.25, "hotels": 0.25, "social": 0.15},
+        "errors": [],
+    })
+    assert "social_data" in result
+    assert len(result["social_data"]) > 0
+    assert "social_insights" in result
+    assert len(result["social_insights"]) > 0
+    # Ranked windows should have social_score
+    assert "social_score" in result["ranked_windows"][0]

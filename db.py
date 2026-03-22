@@ -25,6 +25,18 @@ class HistoryDB:
                 currency TEXT NOT NULL,
                 fetched_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
+            CREATE TABLE IF NOT EXISTS social_insights (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                destination TEXT NOT NULL,
+                month INTEGER NOT NULL,
+                timing_score REAL,
+                crowd_level TEXT,
+                events TEXT,
+                itinerary_tips TEXT,
+                sentiment TEXT,
+                source TEXT,
+                fetched_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
         """)
         self._conn.commit()
 
@@ -66,6 +78,29 @@ class HistoryDB:
                 "SELECT avg_nightly, currency, fetched_at FROM hotel_prices "
                 "WHERE city=? AND checkin_date=? ORDER BY fetched_at DESC LIMIT 1",
                 (city, checkin_date)).fetchone()
+        return dict(row) if row else None
+
+    def save_social(self, destination, month, timing_score, crowd_level,
+                    events, itinerary_tips, sentiment, source):
+        self._conn.execute(
+            "INSERT INTO social_insights (destination, month, timing_score, crowd_level, "
+            "events, itinerary_tips, sentiment, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (destination, month, timing_score, crowd_level, events, itinerary_tips, sentiment, source))
+        self._conn.commit()
+
+    def get_social(self, destination, month, tolerance_months=0):
+        if tolerance_months > 0:
+            row = self._conn.execute(
+                "SELECT timing_score, crowd_level, events, itinerary_tips, sentiment, source, fetched_at "
+                "FROM social_insights WHERE destination=? AND ABS(month - ?) <= ? "
+                "ORDER BY ABS(month - ?) ASC, fetched_at DESC LIMIT 1",
+                (destination, month, tolerance_months, month)).fetchone()
+        else:
+            row = self._conn.execute(
+                "SELECT timing_score, crowd_level, events, itinerary_tips, sentiment, source, fetched_at "
+                "FROM social_insights WHERE destination=? AND month=? "
+                "ORDER BY fetched_at DESC LIMIT 1",
+                (destination, month)).fetchone()
         return dict(row) if row else None
 
     def close(self):
