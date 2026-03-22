@@ -37,6 +37,22 @@ class HistoryDB:
                 source TEXT,
                 fetched_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
+            CREATE TABLE IF NOT EXISTS user_profiles (
+                user_id TEXT PRIMARY KEY,
+                travel_history TEXT NOT NULL DEFAULT '[]',
+                preferences TEXT NOT NULL DEFAULT '{}',
+                budget_level TEXT NOT NULL DEFAULT 'moderate',
+                passport_country TEXT NOT NULL DEFAULT 'IN',
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS discovery_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL DEFAULT 'default',
+                trip_intent TEXT NOT NULL DEFAULT '{}',
+                suggestions TEXT NOT NULL DEFAULT '[]',
+                chosen_destination TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
         """)
         self._conn.commit()
 
@@ -102,6 +118,59 @@ class HistoryDB:
                 "ORDER BY fetched_at DESC LIMIT 1",
                 (destination, month)).fetchone()
         return dict(row) if row else None
+
+    # --- Discovery tables ---
+
+    def save_profile(self, user_id, travel_history, preferences, budget_level,
+                     passport_country):
+        import json
+        self._conn.execute(
+            "INSERT OR REPLACE INTO user_profiles "
+            "(user_id, travel_history, preferences, budget_level, passport_country) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (user_id, json.dumps(travel_history), json.dumps(preferences),
+             budget_level, passport_country))
+        self._conn.commit()
+
+    def get_profile(self, user_id="default"):
+        import json
+        row = self._conn.execute(
+            "SELECT user_id, travel_history, preferences, budget_level, "
+            "passport_country, created_at FROM user_profiles WHERE user_id=?",
+            (user_id,)).fetchone()
+        if row is None:
+            return None
+        return {
+            "user_id": row["user_id"],
+            "travel_history": json.loads(row["travel_history"]),
+            "preferences": json.loads(row["preferences"]),
+            "budget_level": row["budget_level"],
+            "passport_country": row["passport_country"],
+            "created_at": row["created_at"],
+        }
+
+    def save_discovery_session(self, user_id, trip_intent, suggestions, chosen_destination):
+        import json
+        self._conn.execute(
+            "INSERT INTO discovery_sessions "
+            "(user_id, trip_intent, suggestions, chosen_destination) "
+            "VALUES (?, ?, ?, ?)",
+            (user_id, json.dumps(trip_intent), json.dumps(suggestions),
+             chosen_destination))
+        self._conn.commit()
+
+    def get_discovery_sessions(self, user_id="default", limit=5):
+        import json
+        rows = self._conn.execute(
+            "SELECT trip_intent, suggestions, chosen_destination, created_at "
+            "FROM discovery_sessions WHERE user_id=? ORDER BY id DESC LIMIT ?",
+            (user_id, limit)).fetchall()
+        return [{
+            "trip_intent": json.loads(r["trip_intent"]),
+            "suggestions": json.loads(r["suggestions"]),
+            "chosen_destination": r["chosen_destination"],
+            "created_at": r["created_at"],
+        } for r in rows]
 
     def close(self):
         self._conn.close()
