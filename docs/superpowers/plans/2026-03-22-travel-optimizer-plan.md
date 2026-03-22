@@ -1,6 +1,6 @@
 # Travel Optimizer Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Build a LangGraph multi-agent system with Streamlit UI that finds optimal travel windows based on weather, flight prices, and hotel costs.
 
@@ -63,7 +63,7 @@ travel-optimizer/
 **Files:**
 - Create: `requirements.txt`, `.env.example`, `.gitignore`, `config.py`, `models.py`, `tests/__init__.py`, `agents/__init__.py`, `services/__init__.py`
 
-- [ ] **Step 1: Initialize git repo and create .gitignore**
+- [x] **Step 1: Initialize git repo and create .gitignore**
 
 ```bash
 cd /Users/aankur/workspace/travel-optimizer
@@ -80,7 +80,7 @@ __pycache__/
 .streamlit/
 ```
 
-- [ ] **Step 2: Create requirements.txt**
+- [x] **Step 2: Create requirements.txt**
 
 ```txt
 langgraph>=0.2.0
@@ -95,7 +95,7 @@ pytest>=8.0.0
 pytest-asyncio>=0.24.0
 ```
 
-- [ ] **Step 3: Create .env.example**
+- [x] **Step 3: Create .env.example**
 
 ```env
 # Amadeus API (https://developers.amadeus.com)
@@ -111,7 +111,7 @@ DEFAULT_ORIGIN=Bangalore
 DEFAULT_CURRENCY=INR
 ```
 
-- [ ] **Step 4: Create config.py**
+- [x] **Step 4: Create config.py**
 
 ```python
 # config.py
@@ -137,7 +137,7 @@ class Settings(BaseSettings):
 settings = Settings()
 ```
 
-- [ ] **Step 5: Create models.py with Pydantic models**
+- [x] **Step 5: Create models.py with Pydantic models**
 
 ```python
 # models.py
@@ -220,11 +220,11 @@ class TravelState(TypedDict, total=False):
     errors: list[str]
 ```
 
-- [ ] **Step 6: Create empty __init__.py files**
+- [x] **Step 6: Create empty __init__.py files**
 
 Create empty `__init__.py` in `agents/`, `services/`, `tests/`.
 
-- [ ] **Step 7: Set up venv and install deps**
+- [x] **Step 7: Set up venv and install deps**
 
 ```bash
 cd /Users/aankur/workspace/travel-optimizer
@@ -233,7 +233,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-- [ ] **Step 8: Write test for models and run**
+- [x] **Step 8: Write test for models and run**
 
 ```python
 # tests/test_models.py
@@ -262,7 +262,7 @@ def test_flight_result_currency_default():
 Run: `pytest tests/test_models.py -v`
 Expected: 3 PASS
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add -A
@@ -276,7 +276,7 @@ git commit -m "feat: project scaffolding with models, config, and deps"
 **Files:**
 - Create: `services/geocoding.py`, `tests/test_geocoding.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_geocoding.py
@@ -305,7 +305,7 @@ def test_geocode_returns_name():
 Run: `pytest tests/test_geocoding.py -v`
 Expected: FAIL (module not found)
 
-- [ ] **Step 2: Implement geocoding service**
+- [x] **Step 2: Implement geocoding service**
 
 ```python
 # services/geocoding.py
@@ -342,12 +342,12 @@ def geocode_city(city_name: str) -> dict:
     }
 ```
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 Run: `pytest tests/test_geocoding.py -v`
 Expected: 3 PASS
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add services/geocoding.py tests/test_geocoding.py
@@ -361,7 +361,7 @@ git commit -m "feat: geocoding service using Open-Meteo API"
 **Files:**
 - Create: `cache.py`, `db.py`, `tests/test_cache.py`, `tests/test_db.py`
 
-- [ ] **Step 1: Write failing cache tests**
+- [x] **Step 1: Write failing cache tests**
 
 ```python
 # tests/test_cache.py
@@ -387,7 +387,7 @@ def test_cache_expiry():
     assert c.get("key1") is None
 ```
 
-- [ ] **Step 2: Implement cache**
+- [x] **Step 2: Implement cache**
 
 ```python
 # cache.py
@@ -416,12 +416,12 @@ class TTLCache:
         self._store.clear()
 ```
 
-- [ ] **Step 3: Run cache tests**
+- [x] **Step 3: Run cache tests**
 
 Run: `pytest tests/test_cache.py -v`
 Expected: 3 PASS
 
-- [ ] **Step 4: Write failing db tests**
+- [x] **Step 4: Write failing db tests**
 
 ```python
 # tests/test_db.py
@@ -465,7 +465,7 @@ def test_query_similar_date_flight(test_db):
     assert result["price"] == 15000.0
 ```
 
-- [ ] **Step 5: Implement db.py**
+- [x] **Step 5: Implement db.py**
 
 ```python
 # db.py
@@ -569,12 +569,12 @@ class HistoryDB:
         self._conn.close()
 ```
 
-- [ ] **Step 6: Run db tests**
+- [x] **Step 6: Run db tests**
 
 Run: `pytest tests/test_db.py -v`
 Expected: 4 PASS
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add cache.py db.py tests/test_cache.py tests/test_db.py
@@ -588,7 +588,7 @@ git commit -m "feat: TTL cache and SQLite historical data store"
 **Files:**
 - Create: `services/weather_client.py`, `tests/test_weather_client.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_weather_client.py
@@ -620,7 +620,7 @@ def test_weather_invalid_coords():
 Run: `pytest tests/test_weather_client.py -v`
 Expected: FAIL (module not found)
 
-- [ ] **Step 2: Implement weather client**
+- [x] **Step 2: Implement weather client**
 
 ```python
 # services/weather_client.py
@@ -704,12 +704,12 @@ def _parse_daily(data: dict) -> dict:
     }
 ```
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 Run: `pytest tests/test_weather_client.py -v`
 Expected: 2 PASS
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add services/weather_client.py tests/test_weather_client.py
@@ -723,7 +723,7 @@ git commit -m "feat: weather client with climate/historical API selection"
 **Files:**
 - Create: `services/amadeus_client.py`, `tests/test_amadeus_client.py`
 
-- [ ] **Step 1: Write failing tests (mocked — Amadeus needs real keys)**
+- [x] **Step 1: Write failing tests (mocked — Amadeus needs real keys)**
 
 ```python
 # tests/test_amadeus_client.py
@@ -783,7 +783,7 @@ def test_search_hotels_builds_correct_params(client):
 Run: `pytest tests/test_amadeus_client.py -v`
 Expected: FAIL (module not found)
 
-- [ ] **Step 2: Implement Amadeus client**
+- [x] **Step 2: Implement Amadeus client**
 
 ```python
 # services/amadeus_client.py
@@ -900,12 +900,12 @@ class AmadeusClient:
         return None
 ```
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 Run: `pytest tests/test_amadeus_client.py -v`
 Expected: 3 PASS
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add services/amadeus_client.py tests/test_amadeus_client.py
@@ -919,7 +919,7 @@ git commit -m "feat: Amadeus API client with auth, flights, hotels, and IATA loo
 **Files:**
 - Create: `agents/supervisor.py`, `tests/test_supervisor.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_supervisor.py
@@ -957,7 +957,7 @@ def test_wide_range_more_windows():
 Run: `pytest tests/test_supervisor.py -v`
 Expected: FAIL
 
-- [ ] **Step 2: Implement supervisor**
+- [x] **Step 2: Implement supervisor**
 
 ```python
 # agents/supervisor.py
@@ -994,12 +994,12 @@ def supervisor_node(state: TravelState) -> dict:
     return {"candidate_windows": windows, "errors": state.get("errors", [])}
 ```
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 Run: `pytest tests/test_supervisor.py -v`
 Expected: 4 PASS
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add agents/supervisor.py tests/test_supervisor.py
@@ -1013,7 +1013,7 @@ git commit -m "feat: supervisor agent with candidate window generation"
 **Files:**
 - Create: `agents/weather.py`, `tests/test_weather_agent.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_weather_agent.py
@@ -1059,7 +1059,7 @@ def test_weather_node_populates_state():
 Run: `pytest tests/test_weather_agent.py -v`
 Expected: FAIL
 
-- [ ] **Step 2: Implement weather agent**
+- [x] **Step 2: Implement weather agent**
 
 ```python
 # agents/weather.py
@@ -1127,12 +1127,12 @@ def weather_node(state: TravelState) -> dict:
     return {"weather_data": results, "errors": errors}
 ```
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 Run: `pytest tests/test_weather_agent.py -v`
 Expected: 4 PASS
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add agents/weather.py tests/test_weather_agent.py
@@ -1146,7 +1146,7 @@ git commit -m "feat: weather agent with scoring and Open-Meteo integration"
 **Files:**
 - Create: `agents/flights.py`, `tests/test_flights_agent.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_flights_agent.py
@@ -1196,7 +1196,7 @@ def test_flights_node_with_mock_client():
 Run: `pytest tests/test_flights_agent.py -v`
 Expected: FAIL
 
-- [ ] **Step 2: Implement flights agent**
+- [x] **Step 2: Implement flights agent**
 
 ```python
 # agents/flights.py
@@ -1301,12 +1301,12 @@ def flights_node(state: TravelState) -> dict:
     return {"flight_data": results, "errors": errors}
 ```
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 Run: `pytest tests/test_flights_agent.py -v`
 Expected: 3 PASS
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add agents/flights.py tests/test_flights_agent.py
@@ -1320,7 +1320,7 @@ git commit -m "feat: flights agent with Amadeus integration and historical fallb
 **Files:**
 - Create: `agents/hotels.py`, `tests/test_hotels_agent.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_hotels_agent.py
@@ -1366,7 +1366,7 @@ def test_hotels_node_with_mock():
 Run: `pytest tests/test_hotels_agent.py -v`
 Expected: FAIL
 
-- [ ] **Step 2: Implement hotels agent**
+- [x] **Step 2: Implement hotels agent**
 
 ```python
 # agents/hotels.py
@@ -1463,12 +1463,12 @@ def hotels_node(state: TravelState) -> dict:
     return {"hotel_data": results, "errors": errors}
 ```
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 Run: `pytest tests/test_hotels_agent.py -v`
 Expected: 3 PASS
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add agents/hotels.py tests/test_hotels_agent.py
@@ -1482,7 +1482,7 @@ git commit -m "feat: hotels agent with Amadeus integration and historical fallba
 **Files:**
 - Create: `agents/scorer.py`, `tests/test_scorer.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_scorer.py
@@ -1554,7 +1554,7 @@ def test_scorer_handles_missing_dimension():
 Run: `pytest tests/test_scorer.py -v`
 Expected: FAIL
 
-- [ ] **Step 2: Implement scorer**
+- [x] **Step 2: Implement scorer**
 
 ```python
 # agents/scorer.py
@@ -1658,12 +1658,12 @@ def scorer_node(state: TravelState) -> dict:
     return {"ranked_windows": ranked, "errors": state.get("errors", [])}
 ```
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 Run: `pytest tests/test_scorer.py -v`
 Expected: 5 PASS
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add agents/scorer.py tests/test_scorer.py
@@ -1677,7 +1677,7 @@ git commit -m "feat: scorer agent with normalization and priority reweighting"
 **Files:**
 - Create: `agents/synthesizer.py`, `tests/test_synthesizer.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_synthesizer.py
@@ -1764,7 +1764,7 @@ def test_synthesizer_falls_back_on_llm_failure():
 Run: `pytest tests/test_synthesizer.py -v`
 Expected: FAIL
 
-- [ ] **Step 2: Implement synthesizer**
+- [x] **Step 2: Implement synthesizer**
 
 ```python
 # agents/synthesizer.py
@@ -1832,12 +1832,12 @@ def synthesizer_node(state: TravelState) -> dict:
         return {"recommendation": data_summary, "errors": errors}
 ```
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 Run: `pytest tests/test_synthesizer.py -v`
 Expected: 3 PASS
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add agents/synthesizer.py tests/test_synthesizer.py
@@ -1851,7 +1851,7 @@ git commit -m "feat: synthesizer agent with LLM recommendation and fallback"
 **Files:**
 - Create: `graph.py`, `tests/test_graph.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```python
 # tests/test_graph.py
@@ -1915,7 +1915,7 @@ def test_graph_full_run_with_mocks():
 Run: `pytest tests/test_graph.py -v`
 Expected: FAIL
 
-- [ ] **Step 2: Implement graph**
+- [x] **Step 2: Implement graph**
 
 ```python
 # graph.py
@@ -1961,12 +1961,12 @@ def build_graph() -> StateGraph:
     return graph.compile()
 ```
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 Run: `pytest tests/test_graph.py -v`
 Expected: 2 PASS
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add graph.py tests/test_graph.py
@@ -1980,7 +1980,7 @@ git commit -m "feat: LangGraph definition with parallel fan-out and sequential s
 **Files:**
 - Create: `app.py`
 
-- [ ] **Step 1: Implement Streamlit app**
+- [x] **Step 1: Implement Streamlit app**
 
 ```python
 # app.py
@@ -2106,7 +2106,7 @@ if search:
                     st.line_chart(df["Hotel Cost/Night"])
 ```
 
-- [ ] **Step 2: Test manually**
+- [x] **Step 2: Test manually**
 
 ```bash
 cd /Users/aankur/workspace/travel-optimizer
@@ -2116,7 +2116,7 @@ streamlit run app.py
 
 Expected: Browser opens, sidebar shows inputs, search button triggers the graph.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add app.py
@@ -2130,7 +2130,7 @@ git commit -m "feat: Streamlit UI with sidebar inputs, result cards, and compari
 **Files:**
 - Create: `README.md`
 
-- [ ] **Step 1: Write README**
+- [x] **Step 1: Write README**
 
 ```markdown
 # Travel Optimizer
@@ -2184,7 +2184,7 @@ User Input → Supervisor → [Weather | Flights | Hotels] (parallel) → Scorer
 - **Synthesizer**: LLM-generated recommendation (falls back to raw data)
 ```
 
-- [ ] **Step 2: Run full test suite**
+- [x] **Step 2: Run full test suite**
 
 ```bash
 pytest tests/ -v
@@ -2192,7 +2192,7 @@ pytest tests/ -v
 
 Expected: All tests pass.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add README.md
