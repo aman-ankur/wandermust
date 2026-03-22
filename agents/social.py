@@ -43,7 +43,7 @@ def social_node(state: TravelState) -> dict:
     """
     errors = list(state.get("errors", []))
     destination = state["destination"]
-    windows = state["candidate_windows"]
+    windows = state.get("candidate_windows", [])
     sample_month = date.fromisoformat(windows[0]["start"]).strftime("%B") if windows else "summer"
 
     # Step 1: Fetch from both sources
