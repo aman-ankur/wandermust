@@ -4,21 +4,17 @@ Uses LangGraph interrupt() for human-in-the-loop chat.
 Extracts structured trip_intent from the conversation.
 """
 import json
-from langchain_openai import ChatOpenAI
 from langgraph.types import interrupt
 from models import DiscoveryState
 from config import settings
+from agents.llm_helper import get_llm
 
 _llm = None
 
 def _get_llm():
     global _llm
     if _llm is None:
-        _llm = ChatOpenAI(
-            model=settings.discovery_model,
-            api_key=settings.openrouter_api_key,
-            base_url="https://openrouter.ai/api/v1",
-        )
+        _llm = get_llm(settings.discovery_model)
     return _llm
 
 BASE_QUESTIONS = [
