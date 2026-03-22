@@ -2,8 +2,9 @@
 from agents.mock_agents import (
     mock_weather_node, mock_flights_node,
     mock_hotels_node, mock_synthesizer_node,
+    mock_social_node,
 )
-from mock_data import get_mock_weather, get_mock_flight_price, get_mock_hotel_price
+from mock_data import get_mock_weather, get_mock_flight_price, get_mock_hotel_price, get_mock_social_insights
 from graph import build_graph
 
 
@@ -117,6 +118,35 @@ def test_mock_synthesizer_node():
 
 # --- Full graph integration with demo mode ---
 
+def test_mock_social_insights_known():
+    data = get_mock_social_insights("Tokyo", "2026-07-01")
+    assert "timing_score" in data
+    assert 0.0 <= data["timing_score"] <= 1.0
+    assert data["crowd_level"] in ("low", "moderate", "high", "extreme")
+    assert isinstance(data["events"], list)
+    assert isinstance(data["itinerary_tips"], list)
+
+def test_mock_social_insights_unknown():
+    data = get_mock_social_insights("Xyzzyville", "2026-07-01")
+    assert 0.0 <= data["timing_score"] <= 1.0
+
+def test_mock_social_node_shape():
+    state = {
+        "destination": "Tokyo",
+        "candidate_windows": [
+            {"start": "2026-07-01", "end": "2026-07-07"},
+            {"start": "2026-07-08", "end": "2026-07-14"},
+        ],
+        "errors": [],
+    }
+    result = mock_social_node(state)
+    assert "social_data" in result
+    assert "social_insights" in result
+    assert len(result["social_data"]) == 2
+    for d in result["social_data"]:
+        assert 0.0 <= d["social_score"] <= 1.0
+
+
 def test_demo_graph_full_run():
     """Run the full graph in demo mode — no API calls needed."""
     g = build_graph(demo=True)
@@ -127,12 +157,15 @@ def test_demo_graph_full_run():
         "duration_days": 7,
         "num_travelers": 1,
         "budget_max": None,
-        "priorities": {"weather": 0.4, "flights": 0.3, "hotels": 0.3},
+        "priorities": {"weather": 0.35, "flights": 0.25, "hotels": 0.25, "social": 0.15},
         "errors": [],
     })
     assert "ranked_windows" in result
     assert len(result["ranked_windows"]) > 0
     assert "recommendation" in result
     assert len(result["recommendation"]) > 0
+    assert "social_data" in result
+    assert len(result["social_data"]) > 0
+    assert "social_insights" in result
     # Should have no errors in demo mode
     assert len(result.get("errors", [])) == 0
