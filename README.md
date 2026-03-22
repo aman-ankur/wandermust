@@ -2,7 +2,7 @@
 
 **AI-powered travel optimizer** — Don't know where to go? **Discover** the perfect destination through a conversational AI. Already have a destination? **Optimize** the best travel dates by analyzing weather patterns, flight prices, hotel costs, and social insights.
 
-Built with **LangGraph** (multi-agent orchestration), **Streamlit** (UI), **Amadeus API** (flights + hotels), **Open-Meteo** (weather), and **OpenRouter LLMs** (discovery + recommendations).
+Built with **LangGraph** (multi-agent orchestration), **Streamlit** (UI), **SerpApi** (flights + hotels via Google Flights & Google Hotels), **Open-Meteo** (weather), and **OpenRouter LLMs** (discovery + recommendations).
 
 ---
 
@@ -18,7 +18,7 @@ Built with **LangGraph** (multi-agent orchestration), **Streamlit** (UI), **Amad
 ### 📅 Optimize When
 - 🤖 **Multi-agent AI system** — 7 specialized agents working in parallel
 - 🌤️ **Weather analysis** — Climate data and historical patterns
-- ✈️ **Flight price tracking** — Real-time pricing from Amadeus
+- ✈️ **Flight price tracking** — Real-time pricing from SerpApi Google Flights
 - 🏨 **Hotel cost analysis** — Accommodation pricing trends
 - 🔍 **Social insights** — Crowd levels, events, and traveler tips from Reddit & Tavily
 - 📊 **Smart scoring** — Weighted ranking based on your priorities
@@ -35,7 +35,7 @@ Built with **LangGraph** (multi-agent orchestration), **Streamlit** (UI), **Amad
 ### Prerequisites
 
 - Python 3.11+
-- [Amadeus API credentials](https://developers.amadeus.com) (free tier: 500 calls/month)
+- [SerpApi API key](https://serpapi.com) (100 free searches/month)
 - [OpenRouter API key](https://openrouter.ai) (for AI recommendations)
 
 ### Installation
@@ -118,8 +118,8 @@ Results Display
 | **Bridge** | Converts discovery output to optimizer state | Logic-based |
 | **Supervisor** | Generates rolling date windows from user input | Logic-based |
 | **Weather** | Scores weather conditions (temp, rain, humidity) | Open-Meteo (free) |
-| **Flights** | Finds cheapest flight prices | Amadeus API |
-| **Hotels** | Calculates average nightly rates | Amadeus API |
+| **Flights** | Finds cheapest flight prices | SerpApi Google Flights |
+| **Hotels** | Calculates average nightly rates | SerpApi Google Hotels |
 | **Social** | Crawls crowd levels, events, tips | Tavily + Reddit |
 | **Scorer** | Normalizes data & applies priority weights | Internal |
 | **Synthesizer** | Generates natural language recommendations | OpenRouter LLM |
@@ -130,7 +130,7 @@ Results Display
 
 - **LangGraph** — Multi-agent orchestration with parallel execution
 - **Streamlit** — Interactive web UI
-- **Amadeus API** — Flight and hotel data
+- **SerpApi** — Flight + hotel search via Google Flights & Google Hotels
 - **Open-Meteo** — Weather and geocoding (free, no key required)
 - **OpenRouter** — LLM for recommendations
 - **SQLite** — Historical data fallback
@@ -174,9 +174,8 @@ Results Display
 Edit `.env` with your API credentials:
 
 ```env
-# Amadeus API (https://developers.amadeus.com)
-AMADEUS_CLIENT_ID=your_client_id
-AMADEUS_CLIENT_SECRET=your_client_secret
+# SerpApi (https://serpapi.com) — flights + hotels via Google
+SERPAPI_API_KEY=your_serpapi_key
 
 # LLM via OpenRouter (https://openrouter.ai)
 OPENROUTER_API_KEY=your_key
@@ -194,7 +193,6 @@ DEFAULT_CURRENCY=INR
 - [x] ~~Destination discovery with conversational AI~~
 - [x] ~~Social media insights (Reddit, Tavily)~~
 - [x] ~~Demo mode with full mock data~~
-- [ ] Add multiple flight data sources (Kiwi, Skyscanner)
 - [ ] Price trend visualization over time
 - [ ] Multi-destination comparison
 - [ ] Async API calls for faster execution

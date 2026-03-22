@@ -1,13 +1,12 @@
-from langchain_openai import ChatOpenAI
 from models import TravelState
 from config import settings
+from agents.llm_helper import get_llm
 
 _llm = None
 def _get_llm():
     global _llm
     if _llm is None:
-        _llm = ChatOpenAI(model=settings.openrouter_model,
-            api_key=settings.openrouter_api_key, base_url="https://openrouter.ai/api/v1")
+        _llm = get_llm(settings.llm_model)
     return _llm
 
 def format_ranked_data_fallback(ranked, top_n=3):

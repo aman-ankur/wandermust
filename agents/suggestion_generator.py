@@ -4,20 +4,16 @@ Takes user_profile + trip_intent and uses LLM to suggest 3-5 destinations,
 reasoning about visa requirements, budget, flights, seasonality, and preferences.
 """
 import json
-from langchain_openai import ChatOpenAI
 from models import DiscoveryState
 from config import settings
+from agents.llm_helper import get_llm
 
 _llm = None
 
 def _get_llm():
     global _llm
     if _llm is None:
-        _llm = ChatOpenAI(
-            model=settings.discovery_model,
-            api_key=settings.openrouter_api_key,
-            base_url="https://openrouter.ai/api/v1",
-        )
+        _llm = get_llm(settings.discovery_model)
     return _llm
 
 SUGGESTION_PROMPT = """You are an expert travel advisor. Based on the user's profile and trip intent, suggest 3-5 destinations.

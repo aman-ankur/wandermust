@@ -117,24 +117,22 @@ A July window might return: avg_temp 28.5 degrees, 4 rain days (monsoon), humidi
 
 **Time:** ~3-5 seconds for 17 API calls. Open-Meteo is free and has no rate limits, so this is just network latency.
 
-### Flights Agent (Amadeus) — ~10-20 seconds
+### Flights Agent (SerpApi Google Flights) — ~5-15 seconds
 
-The flights agent in `agents/flights.py` is the most complex of the three because it deals with authenticated APIs, rate limits, and fallback logic.
+The flights agent in `agents/flights.py` calls SerpApi's Google Flights engine to find flight prices.
 
-**IATA resolution:** First, it resolves city names to airport codes using the Amadeus IATA lookup: "Bangalore" becomes BLR, "Tokyo" becomes NRT. This takes 2 API calls.
+**No IATA resolution needed:** SerpApi accepts both IATA codes and city names for `departure_id`/`arrival_id`, so the agent passes origin and destination directly.
 
-**Flight search:** For each of the ~17 windows, it searches for flights from BLR to NRT departing on the window's start date. Each call hits `AmadeusClient.search_flights`, which:
-1. Checks if the OAuth token is still valid (auto-refreshes if within 1 minute of expiry)
-2. Calls the Amadeus Flight Offers endpoint with `max=5` results
-3. Returns up to 5 flight offers with prices
+**Flight search:** For each of the ~17 windows, it searches for flights from Bangalore to Tokyo departing on the window's start date. Each call hits `SerpApiClient.search_flights`, which queries the Google Flights engine and returns `best_flights` and `other_flights`.
 
-**Price parsing:** The `parse_flight_prices` function extracts the minimum and average prices:
+**Price parsing:** The `parse_flight_prices` function merges both flight lists and extracts the minimum and average prices:
 
 ```python
 def parse_flight_prices(api_response):
-    offers = api_response.get("data", [])
-    if not offers: return None
-    prices = [float(o["price"]["total"]) for o in offers]
+    all_flights = api_response.get("best_flights", []) + api_response.get("other_flights", [])
+    if not all_flights: return None
+    prices = [f["price"] for f in all_flights if "price" in f]
+    if not prices: return None
     return {"min_price": min(prices), "avg_price": round(sum(prices)/len(prices), 2)}
 ```
 
@@ -144,26 +142,24 @@ def parse_flight_prices(api_response):
 
 **Output:** ~17 entries in `flight_data`, each with min_price, avg_price, currency, and an is_historical flag.
 
-**Time:** ~10-20 seconds. Each Amadeus call takes 0.5-1 second, and there are ~17 flight searches plus 2 IATA lookups plus potential token refresh. This is the bottleneck of the entire pipeline.
+**Time:** ~5-15 seconds. Each SerpApi call takes 0.5-1 second, and there are ~17 flight searches. No IATA lookups needed.
 
-### Hotels Agent (Amadeus) — ~10-20 seconds
+### Hotels Agent (SerpApi Google Hotels) — ~5-15 seconds
 
-The hotels agent in `agents/hotels.py` follows the same pattern as flights but with a two-stage Amadeus call.
+The hotels agent in `agents/hotels.py` follows the same pattern as flights. SerpApi's Google Hotels engine accepts a text query like "Hotels in Tokyo" — no IATA lookup or hotel ID resolution needed.
 
-**IATA resolution:** Resolves "Tokyo" to city code TYO.
-
-**Hotel list:** Fetches up to 10 hotels in Tokyo using the Hotel List endpoint. This call is the same for every window and would benefit from caching (the first call populates the list; subsequent searches for the same city could reuse it).
-
-**Hotel offers:** For each window, queries hotel offers across those 10 hotels with `bestRateOnly=true`, returning the cheapest rate per hotel. The `parse_hotel_prices` function averages across hotels:
+**Hotel search:** For each window, queries Google Hotels with check-in/check-out dates. The `parse_hotel_prices` function extracts `rate_per_night.extracted_lowest` from each property and averages:
 
 ```python
 def parse_hotel_prices(api_response):
-    hotels = api_response.get("data", [])
-    if not hotels: return None
+    properties = api_response.get("properties", [])
+    if not properties: return None
     prices = []
-    for h in hotels:
-        offers = h.get("offers", [])
-        if offers: prices.append(float(offers[0]["price"]["total"]))
+    for p in properties:
+        try:
+            prices.append(float(p["rate_per_night"]["extracted_lowest"]))
+        except (KeyError, TypeError):
+            continue
     if not prices: return None
     return {"avg_nightly": round(sum(prices)/len(prices), 2)}
 ```
@@ -172,11 +168,11 @@ def parse_hotel_prices(api_response):
 
 **Output:** ~17 entries in `hotel_data`.
 
-**Time:** ~10-20 seconds, similar to flights. The hotel list call is one extra API call, but `bestRateOnly` keeps individual offer queries fast.
+**Time:** ~5-15 seconds, similar to flights.
 
 ### Parallel Execution Total
 
-Because all three agents run concurrently, the total wall-clock time is determined by the slowest agent — the Amadeus bottleneck at ~10-20 seconds. Without parallelism, this would be 25-45 seconds (weather + flights + hotels sequentially). The fan-out pattern from [Foundations Chapter 05](../foundations/05-multi-agent-architectures.md) cuts the wait roughly in half.
+Because all three agents run concurrently, the total wall-clock time is determined by the slowest agent — typically the SerpApi calls at ~5-15 seconds. Without parallelism, this would be 15-35 seconds (weather + flights + hotels sequentially). The fan-out pattern from [Foundations Chapter 05](../foundations/05-multi-agent-architectures.md) cuts the wait significantly.
 
 ---
 
@@ -254,11 +250,10 @@ Every stage in the pipeline is designed to degrade gracefully rather than crash.
 
 | Failure | What Happens | User Sees |
 |---------|-------------|-----------|
-| Amadeus rate limited | Flights/hotels agent catches the HTTP error, queries SQLite for historical prices within 7-day tolerance | Results with "(estimated)" badge, or missing dimension if no history exists |
+| SerpApi quota exhausted | Flights/hotels agent catches the error, queries SQLite for historical prices within 7-day tolerance | Results with "(estimated)" badge, or missing dimension if no history exists |
 | Open-Meteo down | Weather agent returns empty `weather_data`, Scorer reweights to flights + hotels only | Results without weather scores, warning in errors section |
 | LLM down (OpenRouter) | Synthesizer catches the exception, returns `format_ranked_data_fallback` output | Plain text ranking instead of natural language — still contains all numbers |
-| City not found in geocoding | `geocode_city` raises `ValueError`, weather agent catches it and appends to errors | Error message displayed, flights/hotels agents may still work if IATA resolves |
-| IATA code not found | Flights or hotels agent returns empty data for that dimension | Scorer reweights remaining dimensions, warning in errors |
+| City not found in geocoding | `geocode_city` raises `ValueError`, weather agent catches it and appends to errors | Error message displayed, flights/hotels agents may still work with city name |
 | All APIs down | All three agents return empty data, Scorer has nothing to rank | "No results found" message |
 | Network timeout | Each API call has a 10-second timeout configured in `config.py`, with 3 retries via httpx | Delayed results or fallback to SQLite |
 
@@ -272,9 +267,9 @@ This is the reliability pattern from [Foundations Chapter 07](../foundations/07-
 
 Understanding the API economics is important for a project that depends on free-tier services.
 
-**Amadeus (500 calls/month shared across all endpoints):**
-- Per search: ~2 IATA lookups + ~17 flight searches + 1 hotel list + ~17 hotel offer searches = ~37 Amadeus calls
-- Monthly budget: approximately 13 searches before hitting the free tier limit
+**SerpApi (100 searches/month):**
+- Per search: ~17 flight searches + ~17 hotel searches = ~34 SerpApi calls
+- Monthly budget: approximately 2-3 full searches before hitting the free tier limit
 - Mitigation: SQLite fallback means repeat searches for the same route use cached data, consuming zero API calls
 
 **Open-Meteo (unlimited, free, no auth):**
@@ -288,12 +283,12 @@ Understanding the API economics is important for a project that depends on free-
 
 **Wall-clock time:**
 - Supervisor: <1ms
-- Data agents (parallel): 10-20 seconds
+- Data agents (parallel): 5-15 seconds
 - Scorer: <1ms
 - Synthesizer: 2-3 seconds
-- **Total: ~12-23 seconds**
+- **Total: ~7-18 seconds**
 
-The bottleneck is Amadeus API latency. For a second search with the same origin-destination pair, cached IATA codes and SQLite fallback data can reduce this significantly.
+The bottleneck is SerpApi latency. For a second search with the same origin-destination pair, SQLite fallback data can reduce this significantly.
 
 ---
 
@@ -303,7 +298,7 @@ This end-to-end trace connects back to every chapter in the foundations series:
 
 - **[Chapter 01 — What Are AI Agents](../foundations/01-what-are-ai-agents.md):** This is an agent system. The Supervisor makes autonomous decisions about which windows to evaluate. The data agents use tools (APIs) to gather information. The Synthesizer uses an LLM to generate output. All three characteristics of agency are present.
 
-- **[Chapter 02 — Tools](../foundations/02-tools-giving-llms-hands.md):** The API clients in `services/` are the tools. `weather_client.py`, `amadeus_client.py`, and `geocoding.py` each wrap an external API with a clean Python interface. The agents call these tools — they do not make HTTP requests directly.
+- **[Chapter 02 — Tools](../foundations/02-tools-giving-llms-hands.md):** The API clients in `services/` are the tools. `weather_client.py`, `serpapi_client.py`, and `geocoding.py` each wrap an external API with a clean Python interface. The agents call these tools — they do not make HTTP requests directly.
 
 - **[Chapter 03 — State and Memory](../foundations/03-state-and-memory.md):** `TravelState` is the shared state flowing through the graph. SQLite provides long-term memory — historical prices persist across sessions and enable fallback.
 
@@ -321,9 +316,9 @@ This end-to-end trace connects back to every chapter in the foundations series:
 
 1. **Parallelism is the biggest performance win.** Running three agents concurrently cuts wall-clock time from 25-45 seconds to 10-20 seconds. The graph definition makes this trivial — just add edges from the same source to multiple targets.
 
-2. **The bottleneck is always the external API.** All internal processing (window generation, scoring, formatting) takes under 1 millisecond combined. The 10-20 seconds of latency is entirely network I/O to Amadeus. Design around this reality.
+2. **The bottleneck is always the external API.** All internal processing (window generation, scoring, formatting) takes under 1 millisecond combined. The 5-15 seconds of latency is entirely network I/O to SerpApi. Design around this reality.
 
-3. **Free-tier API limits shape architecture.** The SQLite fallback, the `bestRateOnly` flag, the `max=5` flight results — these are all driven by the 500 calls/month Amadeus limit. Constraints breed design.
+3. **Free-tier API limits shape architecture.** The SQLite fallback is driven by the 100 searches/month SerpApi limit. Constraints breed design.
 
 4. **Error isolation is non-negotiable.** Each agent catches its own exceptions. A failure in hotels never prevents weather from completing. The Scorer handles whatever data arrives. The Synthesizer works with or without an LLM.
 
