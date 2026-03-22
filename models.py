@@ -60,4 +60,52 @@ class TravelState(TypedDict, total=False):
     social_insights: List[dict]
     ranked_windows: List[dict]
     recommendation: str
+    discovery_context: Optional[dict]
+    errors: Annotated[List[str], operator.add]
+
+
+# --- Discovery Models ---
+
+class UserProfile(BaseModel):
+    """User travel profile, persisted in SQLite. Created during onboarding."""
+    user_id: str = "default"
+    travel_history: List[str] = []
+    preferences: Dict = {}
+    budget_level: str = "moderate"
+    passport_country: str = "IN"
+    created_at: str = ""
+
+
+class DestinationSuggestion(BaseModel):
+    """A single destination suggestion from the suggestion generator."""
+    destination: str
+    country: str
+    reason: str
+    estimated_budget_per_day: float = 0.0
+    best_months: List[int] = []
+    match_score: float = 0.0
+    tags: List[str] = []
+
+
+class DiscoveryState(TypedDict, total=False):
+    # User profile (loaded or built during onboarding)
+    user_profile: dict
+
+    # Onboarding
+    onboarding_complete: bool
+    onboarding_messages: Annotated[List[dict], operator.add]
+
+    # Discovery conversation
+    discovery_messages: Annotated[List[dict], operator.add]
+    discovery_complete: bool
+    trip_intent: dict
+
+    # Suggestions
+    suggestions: List[dict]
+    chosen_destination: Optional[str]
+
+    # Bridge to optimizer
+    optimizer_state: Optional[dict]
+
+    # Errors
     errors: Annotated[List[str], operator.add]

@@ -311,6 +311,116 @@ def get_mock_social_insights(destination: str, start_date: str) -> dict:
         }
 
 
+# --- Discovery Mock Data ---
+
+MOCK_ONBOARDING_RESPONSES = [
+    "I've been to Thailand, Japan, and Italy. I love exploring local food scenes.",
+    "I prefer warm weather, nothing too cold. Tropical is great.",
+    "I'd say I'm a mix of culture and foodie traveler. I like walking around cities.",
+    "Moderate budget — I don't need luxury but I like comfortable stays.",
+    "I hold an Indian passport.",
+]
+
+MOCK_DISCOVERY_RESPONSES = [
+    "I'm thinking sometime in July or August.",
+    "About 7-10 days.",
+    "I'd love beaches and good food. Maybe some history too.",
+    "Visa-free or e-visa would be ideal. Budget under 1.5 lakh total.",
+    "Traveling with my partner.",
+]
+
+MOCK_SUGGESTIONS = [
+    {
+        "destination": "Tbilisi, Georgia",
+        "country": "Georgia",
+        "reason": "Visa-free for Indian passports, incredible food scene, affordable, "
+                  "warm summers with rich history and wine culture.",
+        "estimated_budget_per_day": 4000.0,
+        "best_months": [5, 6, 7, 8, 9],
+        "match_score": 0.92,
+        "tags": ["culture", "food", "budget-friendly", "visa-free"],
+    },
+    {
+        "destination": "Bali, Indonesia",
+        "country": "Indonesia",
+        "reason": "Visa-free for Indians, beautiful beaches, amazing food, "
+                  "great for couples, affordable.",
+        "estimated_budget_per_day": 5000.0,
+        "best_months": [5, 6, 7, 8, 9],
+        "match_score": 0.89,
+        "tags": ["beaches", "food", "culture", "visa-free"],
+    },
+    {
+        "destination": "Da Nang, Vietnam",
+        "country": "Vietnam",
+        "reason": "E-visa available, stunning beaches, incredible street food, "
+                  "very affordable, rich history nearby in Hoi An and Hue.",
+        "estimated_budget_per_day": 3500.0,
+        "best_months": [2, 3, 4, 5, 6, 7],
+        "match_score": 0.86,
+        "tags": ["beaches", "food", "history", "budget-friendly"],
+    },
+    {
+        "destination": "Colombo, Sri Lanka",
+        "country": "Sri Lanka",
+        "reason": "E-visa for Indians, close to India so cheap flights, "
+                  "beaches, temples, excellent cuisine, good for couples.",
+        "estimated_budget_per_day": 4500.0,
+        "best_months": [1, 2, 3, 4, 12],
+        "match_score": 0.83,
+        "tags": ["beaches", "culture", "food", "budget-friendly"],
+    },
+]
+
+MOCK_TRIP_INTENT = {
+    "travel_month": "July",
+    "duration_days": 7,
+    "interests": ["beaches", "food", "history"],
+    "constraints": ["visa-free", "budget under 1.5 lakh"],
+    "travel_companions": "couple",
+}
+
+MOCK_USER_PROFILE = {
+    "user_id": "default",
+    "travel_history": ["Thailand", "Japan", "Italy"],
+    "preferences": {"climate": "warm", "pace": "relaxed", "style": "culture-foodie"},
+    "budget_level": "moderate",
+    "passport_country": "IN",
+}
+
+
+def get_mock_onboarding_response(question_index: int) -> str:
+    """Get a mock user response for onboarding question at given index."""
+    if 0 <= question_index < len(MOCK_ONBOARDING_RESPONSES):
+        return MOCK_ONBOARDING_RESPONSES[question_index]
+    return "I'm not sure, let's go with defaults."
+
+
+def get_mock_discovery_response(question_index: int) -> str:
+    """Get a mock user response for discovery question at given index."""
+    if 0 <= question_index < len(MOCK_DISCOVERY_RESPONSES):
+        return MOCK_DISCOVERY_RESPONSES[question_index]
+    return "I'm flexible on that."
+
+
+def get_mock_suggestions(destination_filter: str = "") -> list[dict]:
+    """Get mock destination suggestions, optionally filtered."""
+    if destination_filter:
+        return [s for s in MOCK_SUGGESTIONS
+                if destination_filter.lower() in s["destination"].lower()]
+    return MOCK_SUGGESTIONS
+
+
+def get_mock_trip_intent() -> dict:
+    """Get a mock trip intent extracted from discovery conversation."""
+    return MOCK_TRIP_INTENT.copy()
+
+
+def get_mock_user_profile() -> dict:
+    """Get a mock user profile."""
+    return MOCK_USER_PROFILE.copy()
+
+
 def get_mock_recommendation(destination: str, origin: str, ranked: list) -> str:
     """Generate a static recommendation string without LLM."""
     if not ranked:

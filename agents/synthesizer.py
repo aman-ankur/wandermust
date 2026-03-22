@@ -47,6 +47,19 @@ def synthesizer_node(state: TravelState) -> dict:
         social_section += "\n\nIncorporate these social insights into your recommendation — mention crowd levels, events, and include 2-3 itinerary tips."
         prompt += social_section
 
+    # Enrich with discovery context if destination came from discovery flow
+    discovery_context = state.get("discovery_context")
+    if discovery_context:
+        discovery_section = "\n\nThis destination was chosen via the discovery flow:"
+        if discovery_context.get("reason"):
+            discovery_section += f"\n- Why this destination: {discovery_context['reason']}"
+        if discovery_context.get("interests"):
+            discovery_section += f"\n- User interests: {', '.join(discovery_context['interests'])}"
+        if discovery_context.get("match_score"):
+            discovery_section += f"\n- Match score: {discovery_context['match_score']}"
+        discovery_section += "\n\nWeave in why this destination was recommended when explaining the best travel window."
+        prompt += discovery_section
+
     try:
         response = _get_llm().invoke(prompt)
         return {"recommendation": response.content, "errors": errors}

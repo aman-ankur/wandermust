@@ -77,6 +77,62 @@ def mock_synthesizer_node(state: TravelState) -> dict:
     return {"recommendation": recommendation, "errors": []}
 
 
+# --- Discovery Mock Agents ---
+
+def mock_onboarding_node(state) -> dict:
+    """Mock onboarding — returns a pre-built profile without LLM or interrupt."""
+    from mock_data import get_mock_user_profile
+    profile = get_mock_user_profile()
+    return {
+        "user_profile": profile,
+        "onboarding_complete": True,
+        "onboarding_messages": [
+            {"role": "assistant", "content": "Welcome! What countries have you visited?"},
+            {"role": "user", "content": "Japan, Thailand, and Italy"},
+        ],
+        "errors": [],
+    }
+
+
+def mock_discovery_chat_node(state) -> dict:
+    """Mock discovery chat — returns pre-built trip intent without LLM or interrupt."""
+    from mock_data import get_mock_trip_intent
+    intent = get_mock_trip_intent()
+    return {
+        "discovery_messages": [
+            {"role": "assistant", "content": "When are you thinking of traveling?"},
+            {"role": "user", "content": "July or August"},
+            {"role": "assistant", "content": "How many days?"},
+            {"role": "user", "content": "About 7 days"},
+            {"role": "assistant", "content": "What interests you?"},
+            {"role": "user", "content": "Beaches and food"},
+        ],
+        "discovery_complete": True,
+        "trip_intent": intent,
+        "errors": [],
+    }
+
+
+def mock_suggestion_generator_node(state) -> dict:
+    """Mock suggestion generator — returns pre-built suggestions without LLM."""
+    from mock_data import get_mock_suggestions
+    return {
+        "suggestions": get_mock_suggestions(),
+        "errors": [],
+    }
+
+
+def mock_bridge_node(state) -> dict:
+    """Mock bridge — builds optimizer state from chosen destination."""
+    from agents.discovery_bridge import build_optimizer_state
+    chosen = state.get("chosen_destination")
+    intent = state.get("trip_intent", {})
+    if not chosen:
+        return {"optimizer_state": None, "errors": ["Bridge: no destination chosen"]}
+    optimizer_state = build_optimizer_state(chosen, intent)
+    return {"optimizer_state": optimizer_state, "errors": []}
+
+
 def mock_social_node(state: TravelState) -> dict:
     """Mock social agent — returns destination-aware simulated insights."""
     from datetime import date as _date
