@@ -1,13 +1,15 @@
-from langchain_openai import ChatOpenAI
 from models import TravelState
 from config import settings
+from agents.llm_helper import get_llm
+import logging
+
+logger = logging.getLogger("wandermust.synthesizer")
 
 _llm = None
 def _get_llm():
     global _llm
     if _llm is None:
-        _llm = ChatOpenAI(model=settings.openrouter_model,
-            api_key=settings.openrouter_api_key, base_url="https://openrouter.ai/api/v1")
+        _llm = get_llm(settings.llm_model)
     return _llm
 
 def format_ranked_data_fallback(ranked, top_n=3):
@@ -61,8 +63,11 @@ def synthesizer_node(state: TravelState) -> dict:
         prompt += discovery_section
 
     try:
+        logger.info(f"Synthesizer: calling LLM for recommendation (prompt={len(prompt)} chars)")
         response = _get_llm().invoke(prompt)
+        logger.info(f"Synthesizer: recommendation generated ({len(response.content)} chars)")
         return {"recommendation": response.content, "errors": errors}
     except Exception as e:
+        logger.error(f"Synthesizer: LLM failed — {e}")
         errors.append(f"Synthesizer: LLM failed — {e}")
         return {"recommendation": data_summary, "errors": errors}

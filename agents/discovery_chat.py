@@ -4,21 +4,20 @@ Uses LangGraph interrupt() for human-in-the-loop chat.
 Extracts structured trip_intent from the conversation.
 """
 import json
-from langchain_openai import ChatOpenAI
+import logging
 from langgraph.types import interrupt
+
+logger = logging.getLogger("wandermust.discovery_chat")
 from models import DiscoveryState
 from config import settings
+from agents.llm_helper import get_llm, parse_json_response
 
 _llm = None
 
 def _get_llm():
     global _llm
     if _llm is None:
-        _llm = ChatOpenAI(
-            model=settings.discovery_model,
-            api_key=settings.openrouter_api_key,
-            base_url="https://openrouter.ai/api/v1",
-        )
+        _llm = get_llm(settings.discovery_model)
     return _llm
 
 BASE_QUESTIONS = [
@@ -85,9 +84,12 @@ def get_next_question(profile: dict, messages: list[dict], asked_count: int) -> 
     )
     try:
         llm = _get_llm()
+        logger.info(f"Discovery: calling LLM for next question (asked={asked_count})")
         response = llm.invoke(prompt)
-        return json.loads(response.content)
-    except Exception:
+        logger.info("Discovery: got next question from LLM")
+        return parse_json_response(response.content)
+    except Exception as e:
+        logger.error(f"Discovery: LLM question generation failed — {e}")
         # Fallback to base questions
         if asked_count < len(BASE_QUESTIONS):
             return {"question": BASE_QUESTIONS[asked_count], "should_complete": False}
@@ -103,9 +105,12 @@ def extract_trip_intent(messages: list[dict]) -> dict:
     prompt = INTENT_EXTRACTION_PROMPT.format(conversation=conversation)
     try:
         llm = _get_llm()
+        logger.info(f"Discovery: extracting trip intent from {len(messages)} messages via LLM")
         response = llm.invoke(prompt)
-        return json.loads(response.content)
-    except Exception:
+        logger.info("Discovery: trip intent extraction complete")
+        return parse_json_response(response.content)
+    except Exception as e:
+        logger.error(f"Discovery: trip intent extraction failed — {e}")
         return {
             "travel_month": "",
             "duration_days": 7,
