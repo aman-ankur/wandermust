@@ -4,9 +4,12 @@ Takes user_profile + trip_intent and uses LLM to suggest 3-5 destinations,
 reasoning about visa requirements, budget, flights, seasonality, and preferences.
 """
 import json
+import logging
 from models import DiscoveryState
+
+logger = logging.getLogger("wandermust.suggestions")
 from config import settings
-from agents.llm_helper import get_llm
+from agents.llm_helper import get_llm, parse_json_response
 
 _llm = None
 
@@ -71,12 +74,17 @@ def generate_suggestions(profile: dict, trip_intent: dict) -> list[dict]:
 
     try:
         llm = _get_llm()
+        logger.info(f"Suggestions: calling LLM (passport={passport}, budget={budget}, month={month})")
         response = llm.invoke(prompt)
-        suggestions = json.loads(response.content)
+        logger.info(f"Suggestions: LLM response received ({len(response.content)} chars)")
+        suggestions = parse_json_response(response.content)
         if isinstance(suggestions, list):
+            logger.info(f"Suggestions: generated {len(suggestions)} destinations")
             return suggestions
+        logger.warning("Suggestions: LLM returned non-list")
         return []
-    except Exception:
+    except Exception as e:
+        logger.error(f"Suggestions: LLM failed — {e}")
         return []
 
 

@@ -1,6 +1,9 @@
 from models import TravelState
 from config import settings
 from agents.llm_helper import get_llm
+import logging
+
+logger = logging.getLogger("wandermust.synthesizer")
 
 _llm = None
 def _get_llm():
@@ -60,8 +63,11 @@ def synthesizer_node(state: TravelState) -> dict:
         prompt += discovery_section
 
     try:
+        logger.info(f"Synthesizer: calling LLM for recommendation (prompt={len(prompt)} chars)")
         response = _get_llm().invoke(prompt)
+        logger.info(f"Synthesizer: recommendation generated ({len(response.content)} chars)")
         return {"recommendation": response.content, "errors": errors}
     except Exception as e:
+        logger.error(f"Synthesizer: LLM failed — {e}")
         errors.append(f"Synthesizer: LLM failed — {e}")
         return {"recommendation": data_summary, "errors": errors}
