@@ -181,28 +181,11 @@ Why deterministic scoring? Because the same weather data produces the same score
 
 ## Flights Agent in Detail
 
-The flights agent in `agents/flights.py` is more complex because Amadeus requires authentication and has real rate limits.
+The flights agent in `agents/flights.py` calls SerpApi's Google Flights engine to find flight prices.
 
-### Step 1: Resolve IATA codes
+### Step 1: No IATA resolution needed
 
-Airlines use IATA codes (BLR for Bangalore, NRT for Tokyo Narita). The flights agent resolves city names to codes:
-
-```python
-def flights_node(state: TravelState) -> dict:
-    client = _get_client()
-    errors = list(state.get("errors", []))
-    currency = settings.default_currency
-    try:
-        origin_iata = client.get_iata_code(state["origin"])
-        dest_iata = client.get_iata_code(state["destination"])
-        if not origin_iata or not dest_iata:
-            raise ValueError(f"IATA not found: origin={origin_iata}, dest={dest_iata}")
-    except Exception as e:
-        errors.append(f"Flights: IATA lookup failed — {e}")
-        return {"flight_data": [], "errors": errors}
-```
-
-If IATA resolution fails, the entire flights agent returns empty. This is a "fail fast" decision — without IATA codes, there is no way to search for flights.
+SerpApi accepts both IATA codes and city names for `departure_id`/`arrival_id`, so the flights agent passes origin and destination directly — no separate IATA lookup step.
 
 ### The `_get_client()` singleton pattern
 
@@ -211,39 +194,33 @@ _client = None
 def _get_client():
     global _client
     if _client is None:
-        _client = AmadeusClient()
+        _client = SerpApiClient(api_key=settings.serpapi_api_key)
     return _client
 ```
 
-Why a module-level singleton? The `AmadeusClient` manages an OAuth token that expires every 30 minutes. Creating a new client for each request would mean re-authenticating every time. The singleton keeps the token alive across calls. It also means the token refresh logic (authenticate when `time.time() >= self._token_expiry`) works correctly — the client remembers when its token expires.
-
-This is a pragmatic choice, not an architectural ideal. In a production system, you might use dependency injection. For a learning project, a module singleton is clear and works.
+Why a module-level singleton? It avoids re-creating the client for each request. This is a pragmatic choice, not an architectural ideal. In a production system, you might use dependency injection. For a learning project, a module singleton is clear and works.
 
 ### Step 2: Search flights and parse prices
 
-For each candidate window, the agent calls the Amadeus Flight Offers API and extracts prices:
+For each candidate window, the agent calls SerpApi Google Flights and extracts prices from `best_flights` and `other_flights`:
 
 ```python
 def parse_flight_prices(api_response):
-    offers = api_response.get("data", [])
-    if not offers:
-        return None
-    prices = [float(o["price"]["total"]) for o in offers]
+    all_flights = api_response.get("best_flights", []) + api_response.get("other_flights", [])
+    if not all_flights: return None
+    prices = [f["price"] for f in all_flights if "price" in f]
+    if not prices: return None
     return {"min_price": min(prices), "avg_price": round(sum(prices)/len(prices), 2)}
 ```
 
-The Amadeus API returns up to 5 flight offers (we set `max=5` in the request). We extract the total price from each, compute the minimum and average, and return structured data. The `parse_flight_prices` function is deliberately separated from the node function — this makes it independently testable:
+SerpApi returns flights grouped into `best_flights` (curated picks) and `other_flights` (remaining options). We merge both lists, extract prices, and compute min and average. The `parse_flight_prices` function is deliberately separated from the node function — this makes it independently testable:
 
 ```python
 def test_parse_prices():
-    resp = {"data": [
-        {"price": {"total": "15000.00"}},
-        {"price": {"total": "18000.00"}},
-        {"price": {"total": "20000.00"}}
-    ]}
+    resp = {"best_flights": [{"price": 267}, {"price": 324}], "other_flights": [{"price": 278}]}
     result = parse_flight_prices(resp)
-    assert result["min_price"] == 15000.0
-    assert result["avg_price"] == 17666.67
+    assert result["min_price"] == 267
+    assert result["avg_price"] == 289.67
 ```
 
 ### Step 3: Save to SQLite and handle failures
@@ -291,51 +268,25 @@ Three paths, one result format. The downstream scorer does not need to know whet
 
 ## Hotels Agent
 
-The hotels agent in `agents/hotels.py` follows the same pattern as flights with one structural difference: the Amadeus Hotel API requires two calls.
+The hotels agent in `agents/hotels.py` follows the same pattern as flights. SerpApi's Google Hotels engine accepts a text query (`q` param like "Hotels in Tokyo") — no IATA lookup or hotel ID resolution needed. A single API call returns hotel properties with nightly rates.
 
-**Step 1: Hotel List API** — given a city code, return hotel IDs in that city. We take the first 10.
-
-**Step 2: Hotel Offers API** — given hotel IDs, check-in, and check-out dates, return prices. We use `bestRateOnly=true` to minimize the response size and API cost.
-
-```python
-def search_hotels(self, city_code, checkin, checkout, currency="INR", adults=1):
-    self._ensure_auth()
-    # First call: get hotel IDs in the city
-    response = httpx.get(HOTEL_LIST_URL, params={"cityCode": city_code},
-        headers=self._headers(), timeout=settings.api_timeout_seconds)
-    response.raise_for_status()
-    hotels = response.json().get("data", [])[:10]
-    if not hotels:
-        return {"data": []}
-    hotel_ids = [h["hotelId"] for h in hotels]
-    # Second call: get offers for those hotels
-    response = httpx.get(HOTEL_OFFERS_URL, params={
-        "hotelIds": ",".join(hotel_ids), "checkInDate": checkin,
-        "checkOutDate": checkout, "adults": adults,
-        "currency": currency, "bestRateOnly": "true",
-    }, headers=self._headers(), timeout=settings.api_timeout_seconds)
-    response.raise_for_status()
-    return response.json()
-```
-
-The price parsing extracts the first offer from each hotel and averages across properties:
+The price parsing extracts `rate_per_night.extracted_lowest` from each property and averages across all hotels:
 
 ```python
 def parse_hotel_prices(api_response):
-    hotels = api_response.get("data", [])
-    if not hotels:
-        return None
+    properties = api_response.get("properties", [])
+    if not properties: return None
     prices = []
-    for h in hotels:
-        offers = h.get("offers", [])
-        if offers:
-            prices.append(float(offers[0]["price"]["total"]))
-    if not prices:
-        return None
+    for p in properties:
+        try:
+            prices.append(float(p["rate_per_night"]["extracted_lowest"]))
+        except (KeyError, TypeError):
+            continue
+    if not prices: return None
     return {"avg_nightly": round(sum(prices)/len(prices), 2)}
 ```
 
-The SQLite fallback pattern is identical to flights — save on success, query on failure with 7-day date tolerance.
+Properties missing `rate_per_night` are silently skipped rather than crashing the parser. The SQLite fallback pattern is identical to flights — save on success, query on failure with 7-day date tolerance.
 
 ---
 
@@ -343,11 +294,11 @@ The SQLite fallback pattern is identical to flights — save on success, query o
 
 The SQLite fallback is not just error handling. It is a system that gets better over time. Here is how it works across multiple uses:
 
-**First search ever (Tokyo, July):** All data comes from live APIs. Every successful response is saved to SQLite. The database now has flight and hotel prices for BLR-NRT in July.
+**First search ever (Tokyo, July):** All data comes from live APIs. Every successful response is saved to SQLite. The database now has flight and hotel prices for Bangalore-Tokyo in July.
 
 **Second search (Tokyo, July):** If APIs are available, you get fresh data. The fresh data is also saved, so the database now has two data points per route — useful for seeing price trends.
 
-**API quota exhausted (500 calls/month used up):** Amadeus returns 429 errors. The agents catch the exception and query SQLite. The user still gets results, marked as "estimated from history." The weather agent is unaffected (Open-Meteo has no limits).
+**API quota exhausted (100 searches/month used up):** SerpApi returns errors. The agents catch the exception and query SQLite. The user still gets results, marked as "estimated from history." The weather agent is unaffected (Open-Meteo has no limits).
 
 **Similar search (Tokyo, August):** Even if the exact dates are not in the database, the 7-day tolerance query finds nearby data. A flight price for July 29 can serve as an estimate for August 3.
 

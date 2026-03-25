@@ -1,5 +1,8 @@
+import logging
 import httpx
 from config import settings
+
+logger = logging.getLogger("wandermust.geocoding")
 
 GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search"
 
@@ -13,8 +16,10 @@ def geocode_city(city_name: str) -> dict:
     response.raise_for_status()
     data = response.json()
     if not data.get("results"):
+        logger.error(f"Geocoding failed: city '{city_name}' not found")
         raise ValueError(f"City '{city_name}' not found")
     result = data["results"][0]
+    logger.info(f"Geocoded '{city_name}' → {result['name']} ({result.get('country', '')}) lat={result['latitude']:.2f} lon={result['longitude']:.2f}")
     return {
         "name": result["name"],
         "latitude": result["latitude"],

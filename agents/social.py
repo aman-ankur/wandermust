@@ -1,22 +1,21 @@
 import json
+import logging
 from datetime import date
-from langchain_openai import ChatOpenAI
 from models import TravelState
 from config import settings
 from db import HistoryDB
 from services.tavily_client import search_destination
 from services.reddit_client import search_subreddits
+from agents.llm_helper import get_llm, parse_json_response
+
+logger = logging.getLogger("wandermust.social")
 
 _llm = None
 
 def _get_llm():
     global _llm
     if _llm is None:
-        _llm = ChatOpenAI(
-            model=settings.social_extraction_model,
-            api_key=settings.openrouter_api_key,
-            base_url="https://openrouter.ai/api/v1",
-        )
+        _llm = get_llm(settings.social_extraction_model)
     return _llm
 
 EXTRACTION_PROMPT = """You are a travel intelligence extractor. Analyze the following social media posts and comments about traveling to {destination}. Extract structured insights.
@@ -47,8 +46,11 @@ def social_node(state: TravelState) -> dict:
     sample_month = date.fromisoformat(windows[0]["start"]).strftime("%B") if windows else "summer"
 
     # Step 1: Fetch from both sources
+    logger.info(f"Social agent: fetching data for {destination}, month={sample_month}")
     tavily_results = search_destination(destination, sample_month)
+    logger.info(f"Social: Tavily returned {len(tavily_results)} results")
     reddit_results = search_subreddits(destination)
+    logger.info(f"Social: Reddit returned {len(reddit_results)} results")
 
     # Step 2: If no content from either source, try DB fallback
     if not tavily_results and not reddit_results:
@@ -92,9 +94,13 @@ def social_node(state: TravelState) -> dict:
     try:
         llm = _get_llm()
         prompt = EXTRACTION_PROMPT.format(destination=destination, content=combined_content)
+        logger.info(f"Social: calling LLM for extraction ({len(combined_content)} chars of content)")
         response = llm.invoke(prompt)
-        extracted = json.loads(response.content)
+        logger.info(f"Social: LLM extraction complete, parsing JSON")
+        extracted = parse_json_response(response.content)
+        logger.info(f"Social: extracted timing_score={extracted.get('timing_score')}, crowd={extracted.get('crowd_level')}, {len(extracted.get('itinerary_tips', []))} tips")
     except Exception as e:
+        logger.error(f"Social: LLM extraction failed — {e}")
         errors.append(f"Social: LLM extraction failed — {e}")
         # Neutral fallback
         social_data = [{"window_start": w["start"], "window_end": w["end"],

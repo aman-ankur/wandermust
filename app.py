@@ -1,9 +1,25 @@
 import time
+import logging
 import streamlit as st
 import pandas as pd
 from config import settings
 
+# Configure logging for all wandermust modules
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
+# Also log to file so we can always check (guard against duplicate handlers on rerun)
+if not any(isinstance(h, logging.FileHandler) for h in logging.getLogger().handlers):
+    _fh = logging.FileHandler("/tmp/wandermust.log", mode="a")
+    _fh.setLevel(logging.INFO)
+    _fh.setFormatter(logging.Formatter("%(asctime)s [%(name)s] %(levelname)s: %(message)s", datefmt="%H:%M:%S"))
+    logging.getLogger().addHandler(_fh)
+logger = logging.getLogger("wandermust")
+
 st.set_page_config(page_title="Wandermust Travel Optimizer", layout="wide")
+logger.info(f"Script rerun — discovery_phase={st.session_state.get('discovery_phase', 'N/A')}, q_index={st.session_state.get('discovery_state', {}).get('q_index', 'N/A')}")
 
 # --- Session state init ---
 if "discovery_phase" not in st.session_state:
@@ -144,7 +160,7 @@ if mode == "🔍 Discover Where":
     ]
 
     def _handle_answer(answer_text):
-        """Process user answer: append to messages, advance to next question or finish phase."""
+        """Process user answer: append to messages, advance to next question or set loading phase."""
         st.session_state.discovery_messages.append({"role": "user", "content": answer_text})
         phase = st.session_state.discovery_phase
         q_idx = st.session_state.discovery_state.get("q_index", 0) + 1
@@ -154,14 +170,15 @@ if mode == "🔍 Discover Where":
         if q_idx < len(steps):
             st.session_state.discovery_messages.append({"role": "assistant", "content": steps[q_idx]["question"]})
         else:
+            # Don't call LLM functions here - just set phase and let the phase handler do it
             if phase == "onboarding":
-                _finish_onboarding()
+                st.session_state.discovery_phase = "loading_profile"
             else:
-                _finish_discovery()
+                st.session_state.discovery_phase = "loading_suggestions"
         st.rerun()
 
-    def _finish_onboarding():
-        """Extract profile from chat, save, move to discovery."""
+    def _do_onboarding_extraction():
+        """Extract profile from chat, save, move to discovery. Called from loading_profile phase."""
         if demo_mode:
             profile = get_mock_user_profile()
         else:
@@ -189,19 +206,31 @@ if mode == "🔍 Discover Where":
         st.session_state.discovery_phase = "discovery"
         st.session_state.discovery_state["q_index"] = 0
 
-    def _finish_discovery():
-        """Extract trip intent, generate suggestions."""
-        st.session_state.discovery_messages.append(
-            {"role": "assistant", "content": "🔍 Thanks! Finding the perfect destinations for you..."})
+    def _do_discovery_extraction():
+        """Extract trip intent, generate suggestions. Called from loading_suggestions phase."""
         if demo_mode:
             intent = get_mock_trip_intent()
             suggestions = get_mock_suggestions()
         else:
             from agents.discovery_chat import extract_trip_intent
             from agents.suggestion_generator import generate_suggestions
-            intent = extract_trip_intent(st.session_state.discovery_messages)
+            logger.info("Extracting trip intent from conversation...")
+            try:
+                intent = extract_trip_intent(st.session_state.discovery_messages)
+                logger.info(f"Trip intent extracted: {intent}")
+            except Exception as e:
+                logger.error(f"Trip intent extraction failed: {e}")
+                intent = {"travel_month": "", "duration_days": 7, "interests": [],
+                          "constraints": [], "travel_companions": "solo",
+                          "region_preference": "", "budget_total": 0}
             profile = st.session_state.discovery_state.get("user_profile", {})
-            suggestions = generate_suggestions(profile, intent)
+            logger.info("Generating destination suggestions...")
+            try:
+                suggestions = generate_suggestions(profile, intent)
+                logger.info(f"Got {len(suggestions)} suggestions")
+            except Exception as e:
+                logger.error(f"Suggestion generation failed: {e}")
+                suggestions = []
             if not suggestions:
                 suggestions = get_mock_suggestions()
         st.session_state.discovery_state["trip_intent"] = intent
@@ -300,6 +329,18 @@ if mode == "🔍 Discover Where":
                 custom = st.chat_input("Type your own answer...")
                 if custom:
                     _handle_answer(custom)
+
+    # --- Phase: loading profile (waiting for LLM) ---
+    elif st.session_state.discovery_phase == "loading_profile":
+        with st.spinner("Saving your profile..."):
+            _do_onboarding_extraction()
+        st.rerun()
+
+    # --- Phase: loading suggestions (waiting for LLM) ---
+    elif st.session_state.discovery_phase == "loading_suggestions":
+        with st.spinner("🔍 Finding the perfect destinations for you..."):
+            _do_discovery_extraction()
+        st.rerun()
 
     # --- Phase: suggestions ---
     elif st.session_state.discovery_phase == "suggestions":

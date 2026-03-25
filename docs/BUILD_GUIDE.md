@@ -14,7 +14,7 @@ A **LangGraph multi-agent system** with **Streamlit UI** that finds the best tim
 
 Before starting:
 1. **Python 3.11+** installed
-2. **Amadeus API key** — sign up free at https://developers.amadeus.com (self-service, 500 calls/month)
+2. **SerpApi API key** — sign up free at https://serpapi.com (100 free searches/month)
 3. **OpenRouter API key** — sign up at https://openrouter.ai (for LLM synthesis)
 4. Project root: `/Users/aankur/workspace/travel-optimizer/`
 
@@ -26,8 +26,8 @@ Before starting:
 [Supervisor] → generates N candidate windows (rolling 7-day blocks)
      │
      ├── [Weather Agent]  ── Open-Meteo API (free, no key)
-     ├── [Flight Agent]   ── Amadeus Flight Offers API
-     └── [Hotel Agent]    ── Amadeus Hotel Offers API
+     ├── [Flight Agent]   ── SerpApi Google Flights
+     └── [Hotel Agent]    ── SerpApi Google Hotels
                                │
                           (all 3 run in parallel via LangGraph fan-out)
                                │
@@ -49,11 +49,8 @@ Before starting:
 | Open-Meteo Geocoding | `geocoding-api.open-meteo.com/v1/search` | None | Unlimited |
 | Open-Meteo Climate | `climate-api.open-meteo.com/v1/climate` | None | Unlimited |
 | Open-Meteo Historical | `archive-api.open-meteo.com/v1/archive` | None | Unlimited |
-| Amadeus Auth | `test.api.amadeus.com/v1/security/oauth2/token` | client_credentials | — |
-| Amadeus Flights | `test.api.amadeus.com/v2/shopping/flight-offers` | Bearer token | 500/mo shared |
-| Amadeus Hotel List | `test.api.amadeus.com/v1/reference-data/locations/hotels/by-city` | Bearer token | 500/mo shared |
-| Amadeus Hotel Offers | `test.api.amadeus.com/v3/shopping/hotel-offers` | Bearer token | 500/mo shared |
-| Amadeus IATA Lookup | `test.api.amadeus.com/v1/reference-data/locations` | Bearer token | 500/mo shared |
+| SerpApi Google Flights | `serpapi.com/search?engine=google_flights` | API key | 100/mo |
+| SerpApi Google Hotels | `serpapi.com/search?engine=google_hotels` | API key | 100/mo |
 | OpenRouter | `openrouter.ai/api/v1` | API key | Pay per token |
 
 ## File Structure
@@ -72,7 +69,7 @@ pip install -r requirements.txt
 
 # Configure API keys
 cp .env.example .env
-# Edit .env with your Amadeus and OpenRouter keys
+# Edit .env with your SerpApi and OpenRouter keys
 
 # Run tests
 pytest tests/ -v
@@ -85,8 +82,7 @@ streamlit run app.py
 
 ## Next Steps (after MVP)
 
-1. **Add Kiwi/Tequila as secondary flight source** — natural "add another agent" exercise
-2. **Price trend charts** — query SQLite history to show how prices change over months
+1. **Price trend charts** — query SQLite history to show how prices change over months
 3. **Budget filtering** — filter out windows where total cost exceeds budget ceiling
 4. **Multiple destinations** — compare "Tokyo vs Bangkok vs Lisbon" side by side
 5. **Deployment** — Streamlit Cloud (free) for personal access from anywhere

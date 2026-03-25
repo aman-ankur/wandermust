@@ -1,6 +1,9 @@
 from models import TravelState
 from services.geocoding import geocode_city
 from services.weather_client import get_weather_for_window
+import logging
+
+logger = logging.getLogger("wandermust.weather_agent")
 
 def score_weather(avg_temp, rain_days, avg_humidity,
                   ideal_temp_min=20.0, ideal_temp_max=28.0):
@@ -24,6 +27,7 @@ def score_weather(avg_temp, rain_days, avg_humidity,
 
 def weather_node(state: TravelState) -> dict:
     errors = list(state.get("errors", []))
+    logger.info(f"Weather agent: {state['destination']}, {len(state['candidate_windows'])} windows")
     try:
         geo = geocode_city(state["destination"])
     except ValueError as e:
