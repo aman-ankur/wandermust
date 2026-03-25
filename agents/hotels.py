@@ -2,6 +2,9 @@ from models import TravelState
 from services.serpapi_client import SerpApiClient
 from db import HistoryDB
 from config import settings
+import logging
+
+logger = logging.getLogger("wandermust.hotels")
 
 _client = None
 def _get_client():
@@ -26,6 +29,7 @@ def hotels_node(state: TravelState) -> dict:
     errors = list(state.get("errors", []))
     currency = settings.default_currency
     destination = state["destination"]
+    logger.info(f"Hotels agent: {destination}, {len(state['candidate_windows'])} windows")
 
     db = HistoryDB(settings.db_path)
     results = []
@@ -49,4 +53,5 @@ def hotels_node(state: TravelState) -> dict:
                     "currency": hist["currency"], "score": 0.0, "is_historical": True, "fetched_at": hist["fetched_at"]})
             else:
                 errors.append(f"Hotels: failed for {window['start']} — {e}")
+    logger.info(f"Hotels agent: got {len(results)} results, {len(errors) - len(state.get('errors', []))} new errors")
     return {"hotel_data": results, "errors": errors}

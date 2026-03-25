@@ -4,11 +4,14 @@ Uses LangGraph interrupt() for human-in-the-loop chat.
 Only runs for first-time users (no profile in DB).
 """
 import json
+import logging
 from langgraph.types import interrupt
+
+logger = logging.getLogger("wandermust.onboarding")
 from models import DiscoveryState
 from config import settings
 from db import HistoryDB
-from agents.llm_helper import get_llm
+from agents.llm_helper import get_llm, parse_json_response
 
 _llm = None
 
@@ -50,9 +53,12 @@ def extract_profile_from_conversation(messages: list[dict]) -> dict:
     prompt = PROFILE_EXTRACTION_PROMPT.format(conversation=conversation)
     try:
         llm = _get_llm()
+        logger.info(f"Onboarding: extracting profile from {len(messages)} messages via LLM")
         response = llm.invoke(prompt)
-        return json.loads(response.content)
-    except Exception:
+        logger.info("Onboarding: profile extraction complete")
+        return parse_json_response(response.content)
+    except Exception as e:
+        logger.error(f"Onboarding: profile extraction failed — {e}")
         return {
             "travel_history": [],
             "preferences": {"climate": "moderate", "pace": "relaxed", "style": "mix"},
