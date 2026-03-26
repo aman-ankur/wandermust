@@ -31,6 +31,7 @@ class ConversationTurn(BaseModel):
     destination_hints: Optional[List[DestinationHint]] = None
     thinking: Optional[str] = None
     phase_complete: bool = False
+    topic: Optional[str] = None
 
 
 class DiscoveryStartRequest(BaseModel):
@@ -40,6 +41,7 @@ class DiscoveryStartRequest(BaseModel):
 class DiscoveryRespondRequest(BaseModel):
     session_id: str
     answer: str
+    option_ids: Optional[List[str]] = None
 
 
 class DiscoverySelectRequest(BaseModel):

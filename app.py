@@ -63,6 +63,8 @@ if mode == "🔍 Discover Where":
         st.session_state.v2_turns = []
     if "v2_current_turn" not in st.session_state:
         st.session_state.v2_current_turn = None
+    if "v2_submitting" not in st.session_state:
+        st.session_state.v2_submitting = False
 
     def _start_session():
         resp = api_start(DiscoveryStartRequest(user_id="default"))
@@ -71,7 +73,11 @@ if mode == "🔍 Discover Where":
         st.session_state.v2_current_turn = turn
         st.session_state.v2_turns = []
 
-    def _submit_answer(answer):
+    def _submit_answer(answer, option_ids=None):
+        if st.session_state.v2_submitting:
+            return
+        st.session_state.v2_submitting = True
+
         cur = st.session_state.v2_current_turn
         if cur:
             st.session_state.v2_turns.append(("assistant_turn", cur))
@@ -80,9 +86,11 @@ if mode == "🔍 Discover Where":
         resp = api_respond(DiscoveryRespondRequest(
             session_id=st.session_state.v2_session_id,
             answer=answer,
+            option_ids=option_ids,
         ))
         turn = ConversationTurn(**resp["turn"])
         st.session_state.v2_current_turn = turn
+        st.session_state.v2_submitting = False
         st.rerun()
 
     def render_turn_history():
@@ -158,17 +166,18 @@ if mode == "🔍 Discover Where":
                     st.caption(opt.insight)
             if st.session_state.v2_multi_selected:
                 if st.button("✅ Confirm", type="primary"):
+                    selected_ids = list(st.session_state.v2_multi_selected)
                     selected_labels = [o.label for o in turn.options if o.id in st.session_state.v2_multi_selected]
                     answer = ", ".join(selected_labels)
                     st.session_state.v2_multi_selected = set()
-                    _submit_answer(answer)
+                    _submit_answer(answer, option_ids=selected_ids)
         else:
             cols = st.columns(min(len(turn.options), 4))
             for j, opt in enumerate(turn.options):
                 with cols[j % len(cols)]:
                     label = f"{opt.emoji or ''} {opt.label}".strip()
                     if st.button(label, key=f"v2_opt_{opt.id}", use_container_width=True):
-                        _submit_answer(opt.label)
+                        _submit_answer(opt.label, option_ids=[opt.id])
                     st.caption(opt.insight)
 
         if turn.can_free_text:
@@ -177,6 +186,11 @@ if mode == "🔍 Discover Where":
                 if hasattr(st.session_state, "v2_multi_selected"):
                     st.session_state.v2_multi_selected = set()
                 _submit_answer(custom)
+
+    # --- Guard against duplicate submissions ---
+    if st.session_state.v2_submitting:
+        with st.spinner("Thinking..."):
+            st.stop()
 
     # --- Main flow ---
     if st.session_state.get("discovery_phase") == "done":

@@ -28,6 +28,8 @@ class SessionStore:
             "trip_intent": {},
             "destination_hints": [],
             "suggestions": [],
+            "known_facts": {},
+            "last_topic_key": None,
         }
         return session_id
 

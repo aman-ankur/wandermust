@@ -1,0 +1,46 @@
+<h2>Discovery Conversation Flow</h2>
+<p class="subtitle">State machine with 4 adaptive phases — LLM drives content within each</p>
+
+<div class="options">
+  <div class="option" data-choice="phase1" onclick="toggleSelect(this)">
+    <div class="letter">1</div>
+    <div class="content">
+      <h3>🎯 Quick Profile (first-time only)</h3>
+      <p><strong>2-3 adaptive questions max.</strong> LLM picks the most important gaps to fill based on what it can already infer. Options are smart: "Indian passport → here's what that unlocks" not just "What passport?"</p>
+      <p style="color: #888; font-size: 0.85em;">Transition: when LLM has enough to reason about visas + budget + style</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="phase2" onclick="toggleSelect(this)">
+    <div class="letter">2</div>
+    <div class="content">
+      <h3>💬 Discovery Conversation</h3>
+      <p><strong>Fully adaptive Q&A.</strong> LLM asks about this trip — timing, interests, constraints, companions. Each question's options are personalized (budget traveler sees different options than luxury). Brief reactive insights between questions. <strong>No fixed question count.</strong></p>
+      <p style="color: #888; font-size: 0.85em;">Transition: when LLM has enough signal to start suggesting (min 2 questions, LLM decides "ready")</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="phase3" onclick="toggleSelect(this)">
+    <div class="letter">3</div>
+    <div class="content">
+      <h3>🌍 Progressive Narrowing</h3>
+      <p><strong>This is the magic phase.</strong> LLM starts revealing destination ideas: "I'm thinking along these lines..." Shows 4-6 rough ideas with brief reasons. User reacts (like/dislike/tell me more). LLM refines based on reactions — drops some, adds new ones, digs deeper on interesting ones. Multiple rounds possible.</p>
+      <p style="color: #888; font-size: 0.85em;">Transition: when user signals they're ready to choose (or LLM senses convergence)</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="phase4" onclick="toggleSelect(this)">
+    <div class="letter">4</div>
+    <div class="content">
+      <h3>✨ Final Reveal</h3>
+      <p><strong>3-5 curated suggestions</strong> with rich detail: why it matches, budget breakdown, best timing, what makes it special, and a "what you might not expect" insight. Each suggestion tells a mini-story. User picks one → bridge to optimizer.</p>
+      <p style="color: #888; font-size: 0.85em;">Transition: user selects → handoff to "Optimize When"</p>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top: 2rem; padding: 1.2rem; border: 1px solid #333; border-radius: 8px; background: #1a1a2e;">
+  <h3 style="margin-top: 0;">Key Difference from Current</h3>
+  <p>Current: 10 fixed questions → dump suggestions.<br>
+  New: <strong>Adaptive phases where the LLM decides what matters</strong>. Phase 3 (Progressive Narrowing) is entirely new — it's where the "well-traveled friend" energy lives. The system thinks out loud, shares destinations early, and refines based on your reactions.</p>
+</div>
