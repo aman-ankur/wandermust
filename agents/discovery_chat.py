@@ -1,7 +1,7 @@
-"""Discovery chat agent — asks adaptive questions about trip intent.
+"""DEPRECATED: Use api/conversation_engine.py for Discovery v2.
 
-Uses LangGraph interrupt() for human-in-the-loop chat.
-Extracts structured trip_intent from the conversation.
+This module is kept for backward compatibility with existing tests.
+New code should use the ConversationTurn-based API.
 """
 import json
 import logging

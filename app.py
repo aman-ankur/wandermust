@@ -49,371 +49,173 @@ with st.sidebar:
 # =========================================================================
 if mode == "🔍 Discover Where":
     st.title("🔍 Discover Where to Travel")
-    st.caption("Tell me about yourself and what you're looking for — I'll suggest destinations")
+    st.caption("Tell me about yourself — I'll suggest destinations that match")
 
-    from agents.discovery_bridge import build_optimizer_state
-    from db import HistoryDB
-    from mock_data import (
-        get_mock_user_profile,
-        get_mock_trip_intent,
-        get_mock_suggestions,
-    )
+    from api.models import ConversationTurn, Option, DestinationHint
+    from api.routes import start as api_start, respond as api_respond, select as api_select
+    from api.routes import get_state as api_get_state, _get_session_store
+    from api.models import DiscoveryStartRequest, DiscoveryRespondRequest, DiscoverySelectRequest
 
-    # --- Clickable options per question ---
-    ONBOARDING_STEPS = [
-        {
-            "question": "👋 Welcome to Wandermust! Let's get to know you. What regions have you traveled to before?",
-            "options": [
-                "🌏 Southeast Asia", "�🇵 East Asia", "🇮🇳 South Asia",
-                "�🇪🇺 Europe", "� North America", "🌎 South America",
-                "🌍 Middle East", "🌍 Africa", "🇦� Australia / Oceania",
-                "🇷🇺 Central Asia", "�🏠 Nowhere yet",
-            ],
-            "multi": True,
-        },
-        {
-            "question": "What kind of climate do you enjoy most?",
-            "options": [
-                "☀️ Warm & sunny", "🌴 Tropical & humid", "❄️ Cold & snowy",
-                "🌤️ Moderate & mild", "🏜️ Dry & arid", "🌧️ Don't mind rain",
-                "🤷 No preference",
-            ],
-            "multi": False,
-        },
-        {
-            "question": "How would you describe your travel style?",
-            "options": [
-                "🏔️ Adventure", "🧘 Relaxation", "🏛️ Culture & history",
-                "🍜 Foodie", "🎉 Nightlife", "🌿 Nature & wildlife",
-                "📸 Photography", "🏄 Water sports", "🛍️ Shopping",
-                "🧳 Road trips", "🎭 Arts & festivals", "💆 Wellness & spa",
-            ],
-            "multi": True,
-        },
-        {
-            "question": "What's your typical budget comfort level?",
-            "options": ["💰 Budget", "💳 Moderate", "💎 Luxury", "🤑 No limit"],
-            "multi": False,
-        },
-        {
-            "question": "What passport do you hold?",
-            "options": [
-                "🇮🇳 Indian", "🇺🇸 US", "🇬🇧 UK", "🇪🇺 EU / Schengen",
-                "🇨🇦 Canadian", "🇦🇺 Australian", "🇸🇬 Singaporean",
-                "🇦🇪 UAE", "🇿🇦 South African", "🇧🇷 Brazilian",
-            ],
-            "multi": False,
-        },
-    ]
+    # Session state for v2
+    if "v2_session_id" not in st.session_state:
+        st.session_state.v2_session_id = None
+    if "v2_turns" not in st.session_state:
+        st.session_state.v2_turns = []
+    if "v2_current_turn" not in st.session_state:
+        st.session_state.v2_current_turn = None
 
-    DISCOVERY_STEPS = [
-        {
-            "question": "When are you thinking of traveling?",
-            "options": [
-                "🌸 March", "🌷 April", "🌼 May", "☀️ June",
-                "🌞 July", "🏖️ August", "🍂 September", "🎃 October",
-                "🍁 November", "❄️ December", "🎄 January", "💝 February",
-                "🤷 Flexible",
-            ],
-            "multi": False,
-        },
-        {
-            "question": "How long is your trip?",
-            "options": [
-                "⚡ Weekend (2–3 days)", "📅 Short (4–5 days)",
-                "�️ Week (6–8 days)", "� Extended (9–14 days)",
-                "🌍 Long (15–21 days)", "✈️ 22+ days",
-            ],
-            "multi": False,
-        },
-        {
-            "question": "What excites you most about this trip? Pick all that apply:",
-            "options": [
-                "🏖️ Beaches", "⛰️ Mountains", "🏛️ History & ruins",
-                "🍜 Street food", "🍷 Fine dining", "🎶 Nightlife",
-                "🌿 Wildlife & nature", "🛍️ Shopping", "📸 Instagram spots",
-                "🏄 Water sports", "🎭 Local festivals", "🧘 Wellness & yoga",
-                "🏕️ Camping & trekking", "🎨 Art & museums", "🍺 Craft beer & wine",
-            ],
-            "multi": True,
-        },
-        {
-            "question": "Any must-have constraints?",
-            "options": [
-                "🛂 Visa-free only", "🛂 E-visa OK", "✈️ Direct flights",
-                "⏱️ Short flights (< 6 hrs)", "💰 Under ₹50k total",
-                "💰 Under ₹1 lakh", "💰 Under ₹1.5 lakh", "💰 Under ₹2.5 lakh",
-                "🦺 Safe for solo travelers", "� Kid-friendly",
-                "�🚫 No constraints",
-            ],
-            "multi": True,
-        },
-        {
-            "question": "Who's coming along?",
-            "options": [
-                "🧑 Solo", "❤️ Couple", "👨‍👩‍👧‍👦 Family with kids",
-                "� Family (adults)", "�👯 Friends (small group)",
-                "🎉 Friends (large group)", "💼 Work trip + leisure",
-            ],
-            "multi": False,
-        },
-    ]
+    def _start_session():
+        resp = api_start(DiscoveryStartRequest(user_id="default"))
+        st.session_state.v2_session_id = resp["session_id"]
+        turn = ConversationTurn(**resp["turn"])
+        st.session_state.v2_current_turn = turn
+        st.session_state.v2_turns = []
 
-    def _handle_answer(answer_text):
-        """Process user answer: append to messages, advance to next question or set loading phase."""
-        st.session_state.discovery_messages.append({"role": "user", "content": answer_text})
-        phase = st.session_state.discovery_phase
-        q_idx = st.session_state.discovery_state.get("q_index", 0) + 1
-        st.session_state.discovery_state["q_index"] = q_idx
+    def _submit_answer(answer):
+        cur = st.session_state.v2_current_turn
+        if cur:
+            st.session_state.v2_turns.append(("assistant_turn", cur))
+        st.session_state.v2_turns.append(("user", answer))
 
-        steps = ONBOARDING_STEPS if phase == "onboarding" else DISCOVERY_STEPS
-        if q_idx < len(steps):
-            st.session_state.discovery_messages.append({"role": "assistant", "content": steps[q_idx]["question"]})
-        else:
-            # Don't call LLM functions here - just set phase and let the phase handler do it
-            if phase == "onboarding":
-                st.session_state.discovery_phase = "loading_profile"
-            else:
-                st.session_state.discovery_phase = "loading_suggestions"
+        resp = api_respond(DiscoveryRespondRequest(
+            session_id=st.session_state.v2_session_id,
+            answer=answer,
+        ))
+        turn = ConversationTurn(**resp["turn"])
+        st.session_state.v2_current_turn = turn
         st.rerun()
 
-    def _do_onboarding_extraction():
-        """Extract profile from chat, save, move to discovery. Called from loading_profile phase."""
-        if demo_mode:
-            profile = get_mock_user_profile()
-        else:
-            from agents.onboarding import extract_profile_from_conversation
-            profile_data = extract_profile_from_conversation(st.session_state.discovery_messages)
-            profile = {
-                "user_id": "default",
-                "travel_history": profile_data.get("travel_history", []),
-                "preferences": profile_data.get("preferences", {}),
-                "budget_level": profile_data.get("budget_level", "moderate"),
-                "passport_country": profile_data.get("passport_country", "IN"),
-            }
-        st.session_state.discovery_state["user_profile"] = profile
-        try:
-            db = HistoryDB(settings.db_path)
-            db.save_profile("default", profile["travel_history"],
-                            profile["preferences"], profile["budget_level"],
-                            profile["passport_country"])
-        except Exception:
-            pass
-        st.session_state.discovery_messages.append(
-            {"role": "assistant", "content": "✅ Profile saved! Now let's plan your next trip..."})
-        st.session_state.discovery_messages.append(
-            {"role": "assistant", "content": DISCOVERY_STEPS[0]["question"]})
-        st.session_state.discovery_phase = "discovery"
-        st.session_state.discovery_state["q_index"] = 0
+    def render_turn_history():
+        for role, content in st.session_state.v2_turns:
+            if role == "user":
+                with st.chat_message("user"):
+                    st.write(content)
+            elif role == "assistant_turn":
+                turn = content
+                if turn.reaction:
+                    with st.chat_message("assistant"):
+                        st.write(turn.reaction)
+                if turn.thinking:
+                    with st.chat_message("assistant"):
+                        st.markdown(f"*{turn.thinking}*")
+                if turn.destination_hints:
+                    for hint in turn.destination_hints:
+                        with st.container(border=True):
+                            st.markdown(f"**{hint.name}**")
+                            st.write(hint.hook)
+                            st.caption(hint.match_reason)
+                with st.chat_message("assistant"):
+                    st.write(turn.question)
 
-    def _do_discovery_extraction():
-        """Extract trip intent, generate suggestions. Called from loading_suggestions phase."""
-        if demo_mode:
-            intent = get_mock_trip_intent()
-            suggestions = get_mock_suggestions()
-        else:
-            from agents.discovery_chat import extract_trip_intent
-            from agents.suggestion_generator import generate_suggestions
-            logger.info("Extracting trip intent from conversation...")
-            try:
-                intent = extract_trip_intent(st.session_state.discovery_messages)
-                logger.info(f"Trip intent extracted: {intent}")
-            except Exception as e:
-                logger.error(f"Trip intent extraction failed: {e}")
-                intent = {"travel_month": "", "duration_days": 7, "interests": [],
-                          "constraints": [], "travel_companions": "solo",
-                          "region_preference": "", "budget_total": 0}
-            profile = st.session_state.discovery_state.get("user_profile", {})
-            logger.info("Generating destination suggestions...")
-            try:
-                suggestions = generate_suggestions(profile, intent)
-                logger.info(f"Got {len(suggestions)} suggestions")
-            except Exception as e:
-                logger.error(f"Suggestion generation failed: {e}")
-                suggestions = []
-            if not suggestions:
-                suggestions = get_mock_suggestions()
-        st.session_state.discovery_state["trip_intent"] = intent
-        st.session_state.discovery_suggestions = suggestions
-        st.session_state.discovery_phase = "suggestions"
-
-    # --- Display chat history ---
-    for msg in st.session_state.discovery_messages:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-
-    # --- Phase: idle → kick off ---
-    if st.session_state.discovery_phase == "idle":
-        has_profile = False
-        try:
-            db = HistoryDB(settings.db_path)
-            profile = db.get_profile("default")
-            has_profile = profile is not None
-        except Exception:
-            pass
-
-        if has_profile:
-            st.session_state.discovery_phase = "discovery"
-            st.session_state.discovery_state["user_profile"] = profile
-            st.session_state.discovery_messages.append(
-                {"role": "assistant", "content": "👋 Welcome back! Let's find your next destination."})
-            st.session_state.discovery_messages.append(
-                {"role": "assistant", "content": DISCOVERY_STEPS[0]["question"]})
-            st.session_state.discovery_state["q_index"] = 0
-        else:
-            st.session_state.discovery_phase = "onboarding"
-            st.session_state.discovery_messages.append(
-                {"role": "assistant", "content": ONBOARDING_STEPS[0]["question"]})
-            st.session_state.discovery_state["q_index"] = 0
-        st.rerun()
-
-    # --- Phase: onboarding / discovery — show clickable options ---
-    elif st.session_state.discovery_phase in ("onboarding", "discovery"):
-        phase = st.session_state.discovery_phase
-        q_idx = st.session_state.discovery_state.get("q_index", 0)
-        steps = ONBOARDING_STEPS if phase == "onboarding" else DISCOVERY_STEPS
-
-        if q_idx < len(steps):
-            step = steps[q_idx]
-            options = step["options"]
-            is_multi = step["multi"]
-
-            NUM_COLS = 4
-
-            if is_multi:
-                # Multi-select: show pill buttons, user picks multiple then confirms
-                if "multi_selected" not in st.session_state:
-                    st.session_state.multi_selected = set()
-
-                st.markdown("**Pick one or more:**")
-                cols = st.columns(NUM_COLS)
-                for j, opt in enumerate(options):
-                    with cols[j % NUM_COLS]:
-                        is_sel = opt in st.session_state.multi_selected
-                        label = f"✅ {opt}" if is_sel else opt
-                        if st.button(label, key=f"opt_{phase}_{q_idx}_{j}", use_container_width=True):
-                            if opt in st.session_state.multi_selected:
-                                st.session_state.multi_selected.discard(opt)
-                            else:
-                                st.session_state.multi_selected.add(opt)
-                            st.rerun()
-
-                sel = st.session_state.multi_selected
-                if sel:
-                    st.caption(f"Selected: {', '.join(sorted(sel))}")
-
-                # Confirm + free text side by side
-                col_confirm, col_text = st.columns([1, 2])
-                with col_confirm:
-                    if sel and st.button("✅ Confirm", key=f"confirm_{phase}_{q_idx}", type="primary", use_container_width=True):
-                        answer = ", ".join(sorted(sel))
-                        st.session_state.multi_selected = set()
-                        _handle_answer(answer)
-                with col_text:
-                    st.caption("or type something different:")
-                custom = st.chat_input("Type your own answer...")
-                if custom:
-                    st.session_state.multi_selected = set()
-                    _handle_answer(custom)
-
-            else:
-                # Single-select: click one option and it immediately advances
-                cols = st.columns(NUM_COLS)
-                for j, opt in enumerate(options):
-                    with cols[j % NUM_COLS]:
-                        if st.button(opt, key=f"opt_{phase}_{q_idx}_{j}", use_container_width=True):
-                            _handle_answer(opt)
-
-                # Free-text always visible
-                st.caption("Don't see your answer? Type it:")
-                custom = st.chat_input("Type your own answer...")
-                if custom:
-                    _handle_answer(custom)
-
-    # --- Phase: loading profile (waiting for LLM) ---
-    elif st.session_state.discovery_phase == "loading_profile":
-        with st.spinner("Saving your profile..."):
-            _do_onboarding_extraction()
-        st.rerun()
-
-    # --- Phase: loading suggestions (waiting for LLM) ---
-    elif st.session_state.discovery_phase == "loading_suggestions":
-        with st.spinner("🔍 Finding the perfect destinations for you..."):
-            _do_discovery_extraction()
-        st.rerun()
-
-    # --- Phase: suggestions ---
-    elif st.session_state.discovery_phase == "suggestions":
-        suggestions = st.session_state.discovery_suggestions
-        if suggestions:
-            st.markdown("### 🎯 Here are my top picks for you!")
-            st.caption("Click a destination to optimize the best travel dates for it.")
-            for i, s in enumerate(suggestions):
-                score_pct = int(s.get("match_score", 0) * 100)
-                tags = s.get("tags", [])
-                budget_day = s.get("estimated_budget_per_day", 0)
-
+    def render_current_turn(turn):
+        if turn.reaction:
+            with st.chat_message("assistant"):
+                st.write(turn.reaction)
+        if turn.thinking:
+            with st.chat_message("assistant"):
+                st.markdown(f"*{turn.thinking}*")
+        if turn.destination_hints:
+            for hint in turn.destination_hints:
                 with st.container(border=True):
                     col_main, col_btn = st.columns([5, 1])
                     with col_main:
-                        st.markdown(f"#### {s['destination']}")
-                        st.write(s.get("reason", ""))
-                        info_parts = []
-                        if tags:
-                            info_parts.append(" · ".join(f"`{t}`" for t in tags))
-                        if budget_day:
-                            info_parts.append(f"~₹{budget_day:,.0f}/day")
-                        info_parts.append(f"**{score_pct}% match**")
-                        st.caption(" — ".join(info_parts))
+                        st.markdown(f"**{hint.name}**")
+                        st.write(hint.hook)
+                        st.caption(hint.match_reason)
                     with col_btn:
-                        if st.button(f"Let's go! ✈️", key=f"pick_{i}", use_container_width=True):
-                            st.session_state.chosen_destination = s["destination"]
-                            intent = st.session_state.discovery_state.get("trip_intent", {})
-                            optimizer_state = build_optimizer_state(s["destination"], intent)
-                            optimizer_state["discovery_context"] = {
-                                "reason": s.get("reason", ""),
-                                "interests": intent.get("interests", []),
-                                "match_score": s.get("match_score", 0),
-                            }
-                            st.session_state.optimizer_prefill = optimizer_state
-                            try:
-                                db = HistoryDB(settings.db_path)
-                                db.save_discovery_session(
-                                    "default", intent, suggestions, s["destination"])
-                            except Exception:
-                                pass
-                            st.session_state.discovery_phase = "done"
-                            st.session_state.discovery_messages = []
-                            st.rerun()
+                        if turn.phase == "reveal":
+                            if st.button("Select", key=f"sel_{hint.name}", use_container_width=True):
+                                resp = api_select(DiscoverySelectRequest(
+                                    session_id=st.session_state.v2_session_id,
+                                    destination=hint.name,
+                                ))
+                                st.session_state.optimizer_prefill = resp["optimizer_state"]
+                                st.session_state.chosen_destination = hint.name
+                                st.session_state.v2_session_id = None
+                                st.session_state.v2_current_turn = None
+                                st.session_state.v2_turns = []
+                                st.session_state.discovery_phase = "done"
+                                st.balloons()
+                                st.rerun()
+
+        with st.chat_message("assistant"):
+            st.write(turn.question)
+
+        if turn.multi_select:
+            if "v2_multi_selected" not in st.session_state:
+                st.session_state.v2_multi_selected = set()
+            cols = st.columns(min(len(turn.options), 4))
+            for j, opt in enumerate(turn.options):
+                with cols[j % len(cols)]:
+                    is_sel = opt.id in st.session_state.v2_multi_selected
+                    label = f"✅ {opt.emoji or ''} {opt.label}" if is_sel else f"{opt.emoji or ''} {opt.label}"
+                    if st.button(label.strip(), key=f"v2_opt_{opt.id}", use_container_width=True):
+                        if opt.id in st.session_state.v2_multi_selected:
+                            st.session_state.v2_multi_selected.discard(opt.id)
+                        else:
+                            st.session_state.v2_multi_selected.add(opt.id)
+                        st.rerun()
+                    st.caption(opt.insight)
+            if st.session_state.v2_multi_selected:
+                if st.button("✅ Confirm", type="primary"):
+                    selected_labels = [o.label for o in turn.options if o.id in st.session_state.v2_multi_selected]
+                    answer = ", ".join(selected_labels)
+                    st.session_state.v2_multi_selected = set()
+                    _submit_answer(answer)
         else:
-            st.warning("No suggestions generated. Try again or switch to Optimize When mode.")
+            cols = st.columns(min(len(turn.options), 4))
+            for j, opt in enumerate(turn.options):
+                with cols[j % len(cols)]:
+                    label = f"{opt.emoji or ''} {opt.label}".strip()
+                    if st.button(label, key=f"v2_opt_{opt.id}", use_container_width=True):
+                        _submit_answer(opt.label)
+                    st.caption(opt.insight)
 
-        if st.button("🔄 Start over", use_container_width=True):
-            st.session_state.discovery_phase = "idle"
-            st.session_state.discovery_messages = []
-            st.session_state.discovery_suggestions = []
-            st.rerun()
+        if turn.can_free_text:
+            custom = st.chat_input("Type your own answer...")
+            if custom:
+                if hasattr(st.session_state, "v2_multi_selected"):
+                    st.session_state.v2_multi_selected = set()
+                _submit_answer(custom)
 
-    # --- Phase: done (destination chosen) ---
-    elif st.session_state.discovery_phase == "done":
+    # --- Main flow ---
+    if st.session_state.get("discovery_phase") == "done":
         chosen = st.session_state.chosen_destination
-        st.balloons()
-        st.success(f"🎉 **{chosen}** selected! Switch to **📅 Optimize When** in the sidebar to find the best travel dates.")
+        st.success(f"**{chosen}** selected! Switch to **Optimize When** in the sidebar to find the best travel dates.")
         st.info("The destination, trip duration, and traveler count have been pre-filled for you.")
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("🔍 Discover another destination", use_container_width=True):
+            if st.button("Discover another destination", use_container_width=True):
                 st.session_state.discovery_phase = "idle"
-                st.session_state.discovery_messages = []
-                st.session_state.discovery_suggestions = []
+                st.session_state.v2_session_id = None
+                st.session_state.v2_turns = []
+                st.session_state.v2_current_turn = None
                 st.rerun()
         with col2:
-            if st.button("❌ Clear selection", use_container_width=True):
+            if st.button("Clear selection", use_container_width=True):
                 st.session_state.optimizer_prefill = None
                 st.session_state.chosen_destination = None
                 st.session_state.discovery_phase = "idle"
-                st.session_state.discovery_messages = []
+                st.session_state.v2_session_id = None
+                st.session_state.v2_turns = []
+                st.session_state.v2_current_turn = None
                 st.rerun()
+    else:
+        if st.session_state.v2_session_id is None:
+            _start_session()
+            st.rerun()
+        else:
+            render_turn_history()
+            turn = st.session_state.v2_current_turn
+            if turn:
+                render_current_turn(turn)
+
+        if st.button("🔄 Start over", use_container_width=True):
+            st.session_state.v2_session_id = None
+            st.session_state.v2_turns = []
+            st.session_state.v2_current_turn = None
+            st.session_state.discovery_phase = "idle"
+            st.rerun()
 
 # =========================================================================
 # OPTIMIZE WHEN MODE (existing logic, unchanged)
