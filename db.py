@@ -5,6 +5,7 @@ class HistoryDB:
         self._conn = sqlite3.connect(db_path)
         self._conn.row_factory = sqlite3.Row
         self._create_tables()
+        self._migrate_tables()
 
     def _create_tables(self):
         self._conn.executescript("""
@@ -51,10 +52,21 @@ class HistoryDB:
                 trip_intent TEXT NOT NULL DEFAULT '{}',
                 suggestions TEXT NOT NULL DEFAULT '[]',
                 chosen_destination TEXT,
+                conversation_history TEXT NOT NULL DEFAULT '[]',
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
         """)
         self._conn.commit()
+
+    def _migrate_tables(self):
+        """Add columns that may be missing in older databases."""
+        try:
+            self._conn.execute("SELECT conversation_history FROM discovery_sessions LIMIT 1")
+        except sqlite3.OperationalError:
+            self._conn.execute(
+                "ALTER TABLE discovery_sessions ADD COLUMN conversation_history TEXT NOT NULL DEFAULT '[]'"
+            )
+            self._conn.commit()
 
     def save_flight(self, origin, destination, departure_date, price, currency):
         self._conn.execute(
@@ -149,26 +161,28 @@ class HistoryDB:
             "created_at": row["created_at"],
         }
 
-    def save_discovery_session(self, user_id, trip_intent, suggestions, chosen_destination):
+    def save_discovery_session(self, user_id, trip_intent, suggestions, chosen_destination,
+                               conversation_history=None):
         import json
         self._conn.execute(
             "INSERT INTO discovery_sessions "
-            "(user_id, trip_intent, suggestions, chosen_destination) "
-            "VALUES (?, ?, ?, ?)",
+            "(user_id, trip_intent, suggestions, chosen_destination, conversation_history) "
+            "VALUES (?, ?, ?, ?, ?)",
             (user_id, json.dumps(trip_intent), json.dumps(suggestions),
-             chosen_destination))
+             chosen_destination, json.dumps(conversation_history or [])))
         self._conn.commit()
 
     def get_discovery_sessions(self, user_id="default", limit=5):
         import json
         rows = self._conn.execute(
-            "SELECT trip_intent, suggestions, chosen_destination, created_at "
+            "SELECT trip_intent, suggestions, chosen_destination, conversation_history, created_at "
             "FROM discovery_sessions WHERE user_id=? ORDER BY id DESC LIMIT ?",
             (user_id, limit)).fetchall()
         return [{
             "trip_intent": json.loads(r["trip_intent"]),
             "suggestions": json.loads(r["suggestions"]),
             "chosen_destination": r["chosen_destination"],
+            "conversation_history": json.loads(r["conversation_history"]) if r["conversation_history"] else [],
             "created_at": r["created_at"],
         } for r in rows]
 

@@ -1,10 +1,6 @@
-"""Discovery graph — LangGraph definition for destination discovery.
+"""DEPRECATED: Discovery v2 uses FastAPI routes instead of LangGraph.
 
-Separate from the optimizer graph. Uses interrupt/resume for conversational
-human-in-the-loop onboarding and discovery chat.
-
-Flow:
-  onboarding → discovery_chat → suggestion_generator → (user picks) → bridge
+This module is kept for reference. New discovery flow is in api/routes.py.
 """
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver

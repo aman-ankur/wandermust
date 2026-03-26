@@ -1,7 +1,7 @@
-"""Onboarding agent — collects user travel profile via conversation.
+"""DEPRECATED: Use api/conversation_engine.py for Discovery v2.
 
-Uses LangGraph interrupt() for human-in-the-loop chat.
-Only runs for first-time users (no profile in DB).
+This module is kept for backward compatibility with existing tests.
+New code should use the ConversationTurn-based API.
 """
 import json
 import logging

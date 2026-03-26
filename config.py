@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     max_onboarding_questions: int = 5
     max_discovery_questions: int = 5
 
+    # Discovery v2
+    discovery_v2_model: str = "gpt-4o-mini"
+    discovery_v2_min_profile_turns: int = 2
+    discovery_v2_min_discovery_turns: int = 2
+    discovery_v2_min_narrowing_turns: int = 1
+
     class Config:
         env_file = ".env"
 
