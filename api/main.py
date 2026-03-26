@@ -1,10 +1,17 @@
 """FastAPI application factory for Discovery v2."""
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.routes import router
 
 
 def create_app() -> FastAPI:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(name)s %(levelname)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
     app = FastAPI(title="Wandermust Discovery v2", version="2.0.0")
     app.add_middleware(
         CORSMiddleware,

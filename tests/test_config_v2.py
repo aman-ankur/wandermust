@@ -5,7 +5,7 @@ def test_discovery_v2_model_setting():
     from config import Settings
     s = Settings(openai_api_key="test")
     assert hasattr(s, "discovery_v2_model")
-    assert s.discovery_v2_model == "gpt-4o-mini"
+    assert s.discovery_v2_model == "gpt-4o"
 
 
 def test_discovery_v2_min_turns():

@@ -1,11 +1,16 @@
-"""Core conversation engine — generates ConversationTurn responses via LLM.
+"""Conversation engine — LLM personality layer.
 
-Replaces the separate onboarding + discovery_chat agents with a single
-adaptive engine that uses pre-baked knowledge context.
+Two focused functions:
+  - generate_personality(): Phrase questions with personality for profile/discovery
+  - generate_destinations(): Generate destination suggestions for narrowing/reveal
+
+The deterministic controller (conversation_controller.py) handles all logic.
+This module only adds natural language flair.
 """
 import json
 import logging
-from typing import Dict, List, Optional
+import time
+from typing import Any, Dict, List, Optional
 
 from api.models import ConversationTurn, Option
 from agents.llm_helper import get_llm, parse_json_response
@@ -19,77 +24,67 @@ _llm = None
 def _get_llm():
     global _llm
     if _llm is None:
-        _llm = get_llm(settings.discovery_v2_model)
+        _llm = get_llm(settings.discovery_v2_model).bind(
+            response_format={"type": "json_object"},
+            max_tokens=1024,
+        )
     return _llm
 
 
-SYSTEM_PROMPT = """You are a well-traveled friend helping plan a trip. You've been to 60+ countries
-and have strong opinions. You're not a search engine — you're someone who says
-"oh you HAVE to go to Georgia, the food scene there blew my mind."
+PERSONALITY_PROMPT = """You are a well-traveled friend who's been to 60+ countries. Opinionated, insightful, honest.
 
-PERSONALITY:
-- Opinionated: you have favorites and you share them with reasons
-- Insightful: every option teaches something the user didn't know
-- Reactive: you acknowledge what they said before moving forward
-- Honest: if a destination is expensive or has visa issues, say so upfront
-- Concise: reactions are 1-2 sentences, not paragraphs
+User context: {known_facts_summary}
+{knowledge_context}
 
-RULES:
-- Never suggest hard-visa destinations unless the user specifically asks
-- Always frame budgets in the user's currency
-- Flag exchange rate issues honestly ("Europe is incredible but INR to EUR hurts")
-- Each option MUST include a brief insight, not just a label
-- When reacting, be specific to what they said, not generic ("Great choice!")
+Topic to ask about: {question_hint}
+Options (keep these EXACT labels, do NOT change them): {option_labels}
+User's last answer: {last_answer}
 
-CURRENT PHASE: {phase}
-{phase_rules}
+Return ONLY valid JSON:
+{{"reaction": "1-2 specific sentences reacting to their last answer, or null if first turn", "question": "natural phrasing of the question", "option_insights": ["one short insight per option, same order as options"]}}"""
+
+
+DESTINATION_PROMPT = """You are a well-traveled friend who's been to 60+ countries. Opinionated, insightful, honest.
+
+User profile:
+{profile_summary}
+
+Trip preferences:
+{trip_summary}
 
 {knowledge_context}
 
-Respond with a valid JSON object matching this schema:
-{{
-    "phase": "{phase}",
-    "reaction": "brief insight reacting to previous answer (null if first turn)",
-    "question": "your next question",
-    "options": [{{"id": "string", "label": "string", "insight": "string", "emoji": "optional"}}],
-    "multi_select": false,
-    "can_free_text": true,
-    "destination_hints": null,
-    "thinking": null,
-    "phase_complete": false
-}}"""
+Phase: {phase}
+{phase_instructions}
 
-PHASE_RULES = {
-    "profile": (
-        "Ask about the most important gaps. You need passport, budget comfort, "
-        "and travel style to make good suggestions. Skip what you already know."
-    ),
-    "discovery": (
-        "Understand this specific trip. Timing, companions, interests, constraints. "
-        "React to each answer with a brief insight. When you have enough to start "
-        "thinking about destinations, set phase_complete: true."
-    ),
+Return ONLY valid JSON:
+{{"reaction": "1-2 sentences", "question": "your question or presentation", "thinking": "your reasoning about why these destinations fit", "destination_hints": [{{"name": "City, Country", "hook": "2-3 sentence pitch", "match_reason": "why it fits their preferences", "budget_hint": "rough budget estimate"}}], "options": [{{"id": "id", "label": "Label", "insight": "1 sentence"}}]}}"""
+
+DESTINATION_PHASE_INSTRUCTIONS = {
     "narrowing": (
-        "Think out loud. Share 4-6 destination ideas in destination_hints. Include a "
-        "'thinking' field explaining your reasoning. The user can react to each "
-        "destination. Refine based on their reactions."
+        "Suggest 4-6 destinations that match their profile. Include a 'thinking' field. "
+        "Options should be reactions: 'Tell me more about X', 'Love these!', 'Show me different options', 'Not quite right'."
     ),
     "reveal": (
-        "Present your final 3-5 curated suggestions in destination_hints. Each gets "
-        "a rich hook (2-3 sentences), budget estimate, and one 'what you might not "
-        "expect' insight. Set phase_complete: true."
+        "Present final 3-5 curated picks. Each gets a rich hook (2-3 sentences), "
+        "budget estimate, and one surprising insight. "
+        "Options: 'I'm sold on X!', 'Compare top 2', 'Start over'."
     ),
 }
+
 
 FALLBACK_TURNS = {
     "profile": ConversationTurn(
         phase="profile",
-        question="Let's start with the basics — what passport do you hold? This helps me suggest visa-friendly destinations.",
+        question="Let's start with the basics -- what passport do you hold? This helps me suggest visa-friendly destinations.",
         options=[
             Option(id="in", label="Indian", insight="Many visa-free options in SE Asia and Caucasus"),
             Option(id="us", label="US", insight="Visa-free almost everywhere"),
+            Option(id="uk", label="UK", insight="Great access across Europe and beyond"),
+            Option(id="eu", label="EU/Schengen", insight="Free movement across 27 countries"),
             Option(id="other", label="Other", insight="Tell me and I'll check"),
         ],
+        topic="passport",
     ),
     "discovery": ConversationTurn(
         phase="discovery",
@@ -99,6 +94,7 @@ FALLBACK_TURNS = {
             Option(id="quarter", label="3-6 months out", insight="Good lead time for most destinations"),
             Option(id="flexible", label="Flexible", insight="We can optimize for best season"),
         ],
+        topic="timing",
     ),
     "narrowing": ConversationTurn(
         phase="narrowing",
@@ -117,147 +113,92 @@ FALLBACK_TURNS = {
 }
 
 
-PHASE_ORDER = ["profile", "discovery", "narrowing", "reveal"]
+def generate_personality(
+    question_hint: str,
+    option_labels: List[str],
+    known_facts: Dict[str, Any],
+    knowledge_context: str = "",
+    last_answer: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Ask the LLM to phrase a question with personality.
 
-MIN_TURNS = {
-    "profile": settings.discovery_v2_min_profile_turns,
-    "discovery": settings.discovery_v2_min_discovery_turns,
-    "narrowing": settings.discovery_v2_min_narrowing_turns,
-    "reveal": 1,
-}
-
-
-def _build_prompt(
-    phase: str,
-    messages: List[Dict],
-    profile: Dict,
-    knowledge_context: str,
-) -> List[Dict[str, str]]:
-    phase_rules = PHASE_RULES.get(phase, "")
-    system = SYSTEM_PROMPT.format(
-        phase=phase,
-        phase_rules=phase_rules,
-        knowledge_context=knowledge_context,
-    )
-
-    prompt_messages = [{"role": "system", "content": system}]
-
-    if profile:
-        profile_summary = json.dumps(profile, indent=2)
-        prompt_messages.append({
-            "role": "system",
-            "content": f"User profile:\n{profile_summary}",
-        })
-
-    for msg in messages:
-        prompt_messages.append({"role": msg["role"], "content": msg["content"]})
-
-    return prompt_messages
-
-
-def generate_turn(
-    phase: str,
-    messages: List[Dict],
-    profile: Dict,
-    knowledge_context: str,
-) -> ConversationTurn:
-    """Generate the next ConversationTurn via LLM.
-
-    Args:
-        phase: Current conversation phase.
-        messages: Conversation history (role/content dicts).
-        profile: User profile dict (may be empty for first-time users).
-        knowledge_context: Pre-built knowledge context string from context_builder.
-
-    Returns:
-        ConversationTurn with the next question, options, and optional insights.
+    Returns dict with: reaction, question, option_insights
+    Falls back to simple phrasing on LLM failure.
     """
-    prompt_messages = _build_prompt(phase, messages, profile, knowledge_context)
+    facts_summary = ", ".join(f"{k}: {v}" for k, v in known_facts.items()) if known_facts else "none yet"
+    labels_str = ", ".join(option_labels)
+
+    prompt = PERSONALITY_PROMPT.format(
+        known_facts_summary=facts_summary,
+        knowledge_context=knowledge_context or "",
+        question_hint=question_hint,
+        option_labels=labels_str,
+        last_answer=last_answer or "(first question)",
+    )
 
     try:
         llm = _get_llm()
-        logger.info(f"ConversationEngine: generating turn (phase={phase}, msgs={len(messages)})")
-        response = llm.invoke(prompt_messages)
-        logger.info(f"ConversationEngine: got response ({len(response.content)} chars)")
-        data = parse_json_response(response.content)
-        turn = ConversationTurn(**data)
-        return turn
-    except Exception as e:
-        logger.error(f"ConversationEngine: LLM failed — {e}")
-        return FALLBACK_TURNS.get(phase, FALLBACK_TURNS["profile"])
-
-
-def decide_next_phase(
-    current_phase: str,
-    turn_count: int,
-    phase_complete: bool,
-    profile: Dict,
-) -> str:
-    """Decide whether to transition to the next phase.
-
-    Phase transitions are LLM-decided via phase_complete, with minimum
-    turn counts as a safety net.
-    """
-    min_turns = MIN_TURNS.get(current_phase, 1)
-
-    if turn_count < min_turns:
-        return current_phase
-
-    if not phase_complete:
-        return current_phase
-
-    try:
-        idx = PHASE_ORDER.index(current_phase)
-        if idx + 1 < len(PHASE_ORDER):
-            return PHASE_ORDER[idx + 1]
-    except ValueError:
-        pass
-
-    return current_phase
-
-
-INTENT_EXTRACTION_PROMPT = """Based on this conversation, extract the trip intent.
-
-Return ONLY valid JSON:
-{{
-    "travel_month": "month name or season",
-    "duration_days": <integer>,
-    "interests": ["list of interests"],
-    "constraints": ["list of constraints"],
-    "travel_companions": "solo|couple|family|group",
-    "region_preference": "specific region or empty string",
-    "budget_total": <estimated total budget number or 0>
-}}
-
-Conversation:
-{conversation}"""
-
-
-def extract_trip_intent_from_messages(messages: List[Dict]) -> Dict:
-    """Extract structured trip intent from conversation history via LLM.
-
-    Called when transitioning from discovery to narrowing phase.
-    Populates session trip_intent for the optimizer bridge.
-    """
-    conversation = "\n".join(
-        f"{'Assistant' if m['role'] == 'assistant' else 'User'}: {m['content']}"
-        for m in messages
-    )
-    prompt = INTENT_EXTRACTION_PROMPT.format(conversation=conversation)
-
-    try:
-        llm = _get_llm()
-        logger.info(f"ConversationEngine: extracting trip intent from {len(messages)} messages")
+        logger.info(f"ConversationEngine: generating personality (hint={question_hint})")
+        t0 = time.perf_counter()
         response = llm.invoke(prompt)
-        return parse_json_response(response.content)
-    except Exception as e:
-        logger.error(f"ConversationEngine: trip intent extraction failed — {e}")
+        llm_ms = (time.perf_counter() - t0) * 1000
+        logger.info(f"[PERF] LLM generate_personality: {llm_ms:.0f}ms")
+
+        data = parse_json_response(response.content)
         return {
-            "travel_month": "",
-            "duration_days": 7,
-            "interests": [],
-            "constraints": [],
-            "travel_companions": "solo",
-            "region_preference": "",
-            "budget_total": 0,
+            "reaction": data.get("reaction"),
+            "question": data.get("question", f"Tell me about {question_hint}"),
+            "option_insights": data.get("option_insights", []),
+        }
+    except Exception as e:
+        logger.error(f"ConversationEngine: personality generation failed -- {e}")
+        return {
+            "reaction": None,
+            "question": f"Tell me about {question_hint}",
+            "option_insights": [],
+        }
+
+
+def generate_destinations(
+    phase: str,
+    known_facts: Dict[str, Any],
+    profile: Dict[str, Any],
+    knowledge_context: str = "",
+    messages: Optional[List[Dict]] = None,
+) -> Dict[str, Any]:
+    """Generate destination suggestions for narrowing/reveal phases.
+
+    Returns dict with: reaction, question, thinking, destination_hints, options
+    """
+    profile_summary = json.dumps(profile, indent=2) if profile else "{}"
+    trip_summary = json.dumps(known_facts, indent=2)
+    phase_instructions = DESTINATION_PHASE_INSTRUCTIONS.get(phase, "")
+
+    prompt = DESTINATION_PROMPT.format(
+        profile_summary=profile_summary,
+        trip_summary=trip_summary,
+        knowledge_context=knowledge_context or "",
+        phase=phase,
+        phase_instructions=phase_instructions,
+    )
+
+    try:
+        llm = _get_llm()
+        logger.info(f"ConversationEngine: generating destinations (phase={phase})")
+        t0 = time.perf_counter()
+        response = llm.invoke(prompt)
+        llm_ms = (time.perf_counter() - t0) * 1000
+        logger.info(f"[PERF] LLM generate_destinations: {llm_ms:.0f}ms")
+
+        data = parse_json_response(response.content)
+        return data
+    except Exception as e:
+        logger.error(f"ConversationEngine: destination generation failed -- {e}")
+        fallback = FALLBACK_TURNS.get(phase, FALLBACK_TURNS["narrowing"])
+        return {
+            "reaction": fallback.reaction,
+            "question": fallback.question,
+            "thinking": None,
+            "destination_hints": None,
+            "options": [o.model_dump() for o in fallback.options],
         }
