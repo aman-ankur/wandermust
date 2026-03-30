@@ -55,6 +55,18 @@ def _get_destination_llm():
     return _destination_llm
 
 
+PERSONALITY_FEW_SHOT = """
+=== EXAMPLES ===
+Example 1 — First question, no prior context:
+Input: topic="passport", options=["Indian","US","UK","EU/Schengen","Other"], last_answer=null
+Output: {{"reaction": null, "question": "First things first -- where's home base? Your passport is basically your travel superpower, and I need to know what I'm working with.", "option_insights": ["SE Asia is your playground -- visa-free gems like Thailand, Georgia, Bali", "You've got the golden ticket -- 185+ countries visa-free", "Strong across Europe and Commonwealth", "27 countries, zero borders, pure freedom", "No worries -- just tell me and I'll map out your options"]}}
+
+Example 2 — Budget question after knowing passport:
+Input: topic="budget_level", known_facts={{passport: "Indian"}}, last_answer="Indian"
+Output: {{"reaction": "Indian passport -- solid! You've got visa-free access to some of my favorite corners of the world. Thailand, Georgia, Indonesia -- all waiting for you.", "question": "Now the real talk -- how do you like to travel? Are we stretching every rupee or treating ourselves?", "option_insights": ["2-3K/day gets you incredible experiences across SE Asia and the Caucasus", "4-6K/day opens up Turkey, Georgia, Eastern Europe comfortably", "8-12K/day for boutique stays and curated experiences", "15K+/day -- we're talking Maldives overwater villas and Swiss chalets"]}}
+=== END EXAMPLES ==="""
+
+
 PERSONALITY_PROMPT = """You are a well-traveled friend who's been to 60+ countries. Opinionated, insightful, honest.
 You give advice that feels personal, not generic. Reference specific things the user said earlier.
 
@@ -68,8 +80,17 @@ User's last answer: {last_answer}
 
 Personalize option_insights using what you know about this user. Reference their specific preferences, not generic descriptions.
 
+{few_shot}
+
 Return ONLY valid JSON:
 {{"reaction": "1-2 specific sentences reacting to their last answer referencing what they actually said, or null if first turn", "question": "natural phrasing of the question that flows from the conversation", "option_insights": ["one personalized insight per option, same order as options"]}}"""
+
+
+DESTINATION_FEW_SHOT = """
+=== EXAMPLE ===
+Input: Indian passport, mid-range budget, loves food + culture, traveling with partner, next 1-2 months
+Output: {{"reaction": "A foodie couple trip on a mid-range budget with just a month to plan? I know exactly where to send you.", "question": "I've picked places where you two can eat your way through incredible cultures without breaking the bank. Here are my top picks:", "thinking": "Indian passport means visa-free SE Asia is ideal for short planning windows. Mid-range budget + food focus points to countries with incredible street food scenes. Couple trip means romantic but not resort-y.", "destination_hints": [{{"name": "Hanoi, Vietnam", "hook": "The best food city in SE Asia, full stop. You'll spend mornings in French-colonial cafes, afternoons lost in the Old Quarter, and evenings at street-side pho stalls where a life-changing bowl costs 80 rupees.", "match_reason": "Visa-free for Indians, legendary food scene, incredibly affordable for mid-range budgets", "budget_hint": "~3,500-5,000 INR/day for two including meals, stays, and experiences"}}], "options": [{{"id": "more_hanoi", "label": "Tell me more about Hanoi", "insight": "I've barely scratched the surface -- egg coffee alone is worth the trip"}}]}}
+=== END EXAMPLE ==="""
 
 
 DESTINATION_PROMPT = """You are a well-traveled friend who's been to 60+ countries. Opinionated, insightful, honest.
@@ -86,6 +107,8 @@ Trip preferences:
 
 Phase: {phase}
 {phase_instructions}
+
+{few_shot}
 
 Return ONLY valid JSON:
 {{"reaction": "1-2 sentences connecting to what they told you", "question": "your question or presentation", "thinking": "your reasoning about why these destinations fit THIS specific user", "destination_hints": [{{"name": "City, Country", "hook": "2-3 sentence pitch referencing their interests", "match_reason": "why it fits their stated preferences", "budget_hint": "rough budget estimate in their currency"}}], "options": [{{"id": "id", "label": "Label", "insight": "1 sentence"}}]}}"""
@@ -167,6 +190,7 @@ def generate_personality(
         question_hint=question_hint,
         option_labels=labels_str,
         last_answer=last_answer or "(first question)",
+        few_shot=PERSONALITY_FEW_SHOT,
     )
 
     try:
@@ -215,6 +239,7 @@ def generate_destinations(
         knowledge_context=knowledge_context or "",
         phase=phase,
         phase_instructions=phase_instructions,
+        few_shot=DESTINATION_FEW_SHOT,
     )
 
     try:

@@ -190,3 +190,35 @@ def test_conversation_summary_truncates():
 
 def test_conversation_summary_empty():
     assert build_conversation_summary([]) == ""
+
+
+def test_personality_prompt_includes_few_shot():
+    """Verify the personality LLM receives few-shot examples."""
+    mock_llm = MagicMock()
+    mock_llm.invoke.return_value = MagicMock(content=MOCK_PERSONALITY_JSON)
+
+    with patch("api.conversation_engine._get_personality_llm", return_value=mock_llm):
+        generate_personality(
+            question_hint="what passport they hold",
+            option_labels=["Indian", "US"],
+            known_facts={},
+        )
+
+    prompt_sent = mock_llm.invoke.call_args[0][0]
+    assert "=== EXAMPLES ===" in prompt_sent
+    assert "SE Asia is your playground" in prompt_sent
+
+
+def test_destination_prompt_includes_few_shot():
+    mock_llm = MagicMock()
+    mock_llm.invoke.return_value = MagicMock(content='{"reaction":"r","question":"q","thinking":"t","destination_hints":[],"options":[]}')
+
+    with patch("api.conversation_engine._get_destination_llm", return_value=mock_llm):
+        generate_destinations(
+            phase="narrowing",
+            known_facts={"passport": "Indian", "timing": "Next 1-2 months"},
+            profile={"passport_country": "IN"},
+        )
+
+    prompt_sent = mock_llm.invoke.call_args[0][0]
+    assert "=== EXAMPLE ===" in prompt_sent
