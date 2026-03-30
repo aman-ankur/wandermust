@@ -123,7 +123,11 @@ DESTINATION_PHASE_INSTRUCTIONS = {
         "Look at what they said in the conversation to understand which destinations they liked. "
         "Present final 3-5 curated picks focused on what excited them. Each gets a rich hook (2-3 sentences), "
         "a detailed budget breakdown in their currency, best time to visit, and one surprising insider tip. "
-        "Options: 'I'm sold on X!', 'Compare top 2', 'Start over'."
+        "IMPORTANT: This is the FINAL reveal. Do NOT generate 'Tell me more' options. "
+        "You MUST use exactly these options: "
+        '[{"id": "sold", "label": "I\'m sold!", "insight": "Let\'s lock it in"}, '
+        '{"id": "compare", "label": "Compare top 2", "insight": "Side by side breakdown"}, '
+        '{"id": "start_over", "label": "Start over", "insight": "Back to square one"}]'
     ),
 }
 
