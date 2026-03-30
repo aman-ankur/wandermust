@@ -8,6 +8,7 @@ from unittest.mock import patch, MagicMock
 from api.conversation_engine import (
     generate_personality,
     generate_destinations,
+    build_conversation_summary,
     FALLBACK_TURNS,
 )
 from api.models import ConversationTurn
@@ -165,3 +166,27 @@ def test_destinations_uses_smart_model():
             profile={"passport_country": "IN"},
         )
         mock_get_llm.assert_called_with("gpt-4o")
+
+
+def test_conversation_summary_basic():
+    messages = [
+        {"role": "assistant", "content": "What passport do you hold?"},
+        {"role": "user", "content": "Indian passport"},
+        {"role": "assistant", "content": "What's your budget?"},
+        {"role": "user", "content": "Mid-range"},
+    ]
+    summary = build_conversation_summary(messages)
+    assert "Indian passport" in summary
+    assert "Mid-range" in summary
+
+
+def test_conversation_summary_truncates():
+    messages = [{"role": "assistant" if i % 2 == 0 else "user", "content": f"msg{i}"} for i in range(20)]
+    summary = build_conversation_summary(messages, max_turns=4)
+    assert "msg19" in summary
+    assert "msg0" not in summary
+    assert "msg15" not in summary
+
+
+def test_conversation_summary_empty():
+    assert build_conversation_summary([]) == ""

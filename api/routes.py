@@ -190,6 +190,7 @@ def start(request: DiscoveryStartRequest) -> Dict[str, Any]:
         option_labels=option_labels,
         known_facts=ctrl.known_facts,
         knowledge_context=knowledge_ctx,
+        messages=session.get("messages", []),
     )
 
     turn = _assemble_turn(ctrl, personality)
@@ -292,6 +293,7 @@ def respond(request: DiscoveryRespondRequest) -> Dict[str, Any]:
         known_facts=ctrl.known_facts,
         knowledge_context=knowledge_ctx,
         last_answer=ctrl.last_answer_text,
+        messages=session["messages"],
     )
 
     turn = _assemble_turn(ctrl, personality)
