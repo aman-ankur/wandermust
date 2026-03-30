@@ -49,3 +49,36 @@ def test_conversation_turn_reveal_phase():
     )
     assert len(turn.destination_hints) == 2
     assert turn.phase_complete is True
+
+
+from api.routes import _resolve_month
+
+
+def test_resolve_month_soon():
+    from datetime import datetime
+    facts = {"timing": "Next 1-2 months"}
+    result = _resolve_month(facts)
+    assert result == datetime.now().month
+
+
+def test_resolve_month_quarter():
+    from datetime import datetime
+    facts = {"timing": "3-6 months out"}
+    expected = (datetime.now().month + 3 - 1) % 12 + 1
+    result = _resolve_month(facts)
+    assert result == expected
+
+
+def test_resolve_month_later():
+    facts = {"timing": "6+ months out"}
+    assert _resolve_month(facts) is None
+
+
+def test_resolve_month_flexible():
+    from datetime import datetime
+    facts = {"timing": "Flexible"}
+    assert _resolve_month(facts) == datetime.now().month
+
+
+def test_resolve_month_no_timing():
+    assert _resolve_month({}) is None

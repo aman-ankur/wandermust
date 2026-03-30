@@ -8,7 +8,8 @@ Endpoints:
 """
 import logging
 import time
-from typing import Any, Dict, List
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
 
@@ -54,12 +55,29 @@ def _get_db() -> HistoryDB:
     return _get_db._instance
 
 
-def _build_knowledge_context(profile: Dict) -> str:
+def _resolve_month(known_facts: Dict) -> Optional[int]:
+    """Map timing preference to a calendar month for seasonality grounding."""
+    timing = known_facts.get("timing")
+    if not timing:
+        return None
+    now_month = datetime.now().month
+    if timing == "Next 1-2 months":
+        return now_month
+    if timing == "3-6 months out":
+        return (now_month + 3 - 1) % 12 + 1
+    if timing == "Flexible":
+        return now_month
+    return None  # "6+ months out" or unknown
+
+
+def _build_knowledge_context(profile: Dict, known_facts: Dict = None) -> str:
     if not profile:
         return ""
+    month = _resolve_month(known_facts) if known_facts else None
     return build_context(
         passport=profile.get("passport_country", "IN"),
         budget=profile.get("budget_level", "moderate"),
+        month=month,
     )
 
 
@@ -162,7 +180,7 @@ def start(request: DiscoveryStartRequest) -> Dict[str, Any]:
         return {"session_id": session_id, "turn": fallback.model_dump()}
 
     t_ctx = time.perf_counter()
-    knowledge_ctx = _build_knowledge_context(profile or {})
+    knowledge_ctx = _build_knowledge_context(profile or {}, ctrl.known_facts)
     ctx_ms = (time.perf_counter() - t_ctx) * 1000
     logger.info(f"[PERF] build_context: {ctx_ms:.1f}ms")
 
@@ -211,7 +229,7 @@ def respond(request: DiscoveryRespondRequest) -> Dict[str, Any]:
 
     if ctrl.phase in ("narrowing", "reveal"):
         profile = session.get("profile", {})
-        knowledge_ctx = _build_knowledge_context(profile)
+        knowledge_ctx = _build_knowledge_context(profile, ctrl.known_facts)
 
         dest_data = generate_destinations(
             phase=ctrl.phase,
