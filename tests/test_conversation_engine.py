@@ -24,7 +24,7 @@ def test_generate_personality_returns_dict():
     mock_llm = MagicMock()
     mock_llm.invoke.return_value = MagicMock(content=MOCK_PERSONALITY_JSON)
 
-    with patch("api.conversation_engine._get_llm", return_value=mock_llm):
+    with patch("api.conversation_engine._get_personality_llm", return_value=mock_llm):
         result = generate_personality(
             question_hint="what passport they hold",
             option_labels=["Indian", "US", "Other"],
@@ -41,7 +41,7 @@ def test_generate_personality_with_last_answer():
     mock_llm = MagicMock()
     mock_llm.invoke.return_value = MagicMock(content=MOCK_PERSONALITY_JSON)
 
-    with patch("api.conversation_engine._get_llm", return_value=mock_llm):
+    with patch("api.conversation_engine._get_personality_llm", return_value=mock_llm):
         result = generate_personality(
             question_hint="their budget comfort level",
             option_labels=["Budget-friendly", "Mid-range", "Luxury"],
@@ -56,7 +56,7 @@ def test_generate_personality_fallback_on_failure():
     mock_llm = MagicMock()
     mock_llm.invoke.side_effect = Exception("LLM timeout")
 
-    with patch("api.conversation_engine._get_llm", return_value=mock_llm):
+    with patch("api.conversation_engine._get_personality_llm", return_value=mock_llm):
         result = generate_personality(
             question_hint="what passport they hold",
             option_labels=["Indian", "US"],
@@ -86,7 +86,7 @@ def test_generate_destinations_returns_dict():
     mock_llm = MagicMock()
     mock_llm.invoke.return_value = MagicMock(content=MOCK_DESTINATIONS_JSON)
 
-    with patch("api.conversation_engine._get_llm", return_value=mock_llm):
+    with patch("api.conversation_engine._get_destination_llm", return_value=mock_llm):
         result = generate_destinations(
             phase="narrowing",
             known_facts={"passport": "Indian", "budget_level": "Mid-range"},
@@ -103,7 +103,7 @@ def test_generate_destinations_fallback_on_failure():
     mock_llm = MagicMock()
     mock_llm.invoke.side_effect = Exception("LLM timeout")
 
-    with patch("api.conversation_engine._get_llm", return_value=mock_llm):
+    with patch("api.conversation_engine._get_destination_llm", return_value=mock_llm):
         result = generate_destinations(
             phase="narrowing",
             known_facts={},
@@ -125,3 +125,43 @@ def test_fallback_turns_exist():
 def test_fallback_profile_has_topic():
     turn = FALLBACK_TURNS["profile"]
     assert turn.topic == "passport"
+
+
+def test_personality_uses_fast_model():
+    """Personality generation should use the fast (mini) model."""
+    with patch("api.conversation_engine.get_llm") as mock_get_llm:
+        mock_llm = MagicMock()
+        mock_llm.bind.return_value = mock_llm
+        mock_llm.invoke.return_value = MagicMock(content=MOCK_PERSONALITY_JSON)
+        mock_get_llm.return_value = mock_llm
+
+        import api.conversation_engine as eng
+        eng._personality_llm = None
+        eng._destination_llm = None
+
+        generate_personality(
+            question_hint="what passport they hold",
+            option_labels=["Indian", "US"],
+            known_facts={},
+        )
+        mock_get_llm.assert_called_with("gpt-4o-mini")
+
+
+def test_destinations_uses_smart_model():
+    """Destination generation should use the smart (full) model."""
+    with patch("api.conversation_engine.get_llm") as mock_get_llm:
+        mock_llm = MagicMock()
+        mock_llm.bind.return_value = mock_llm
+        mock_llm.invoke.return_value = MagicMock(content='{"reaction":"nice","question":"q","thinking":"t","destination_hints":[],"options":[]}')
+        mock_get_llm.return_value = mock_llm
+
+        import api.conversation_engine as eng
+        eng._personality_llm = None
+        eng._destination_llm = None
+
+        generate_destinations(
+            phase="narrowing",
+            known_facts={"passport": "Indian"},
+            profile={"passport_country": "IN"},
+        )
+        mock_get_llm.assert_called_with("gpt-4o")
