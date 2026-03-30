@@ -118,19 +118,27 @@ def _assemble_destination_turn(phase: str, dest_data: Dict[str, Any]) -> Convers
                 match_reason=h.get("match_reason", h.get("budget_hint", "")),
             ))
 
-    raw_options = dest_data.get("options", [])
-    options = []
-    for o in raw_options:
-        if isinstance(o, dict):
-            options.append(Option(
-                id=o.get("id", o.get("label", "opt")),
-                label=o.get("label", "Option"),
-                insight=o.get("insight", ""),
-            ))
+    # Reveal phase: deterministic options, don't trust LLM
+    if phase == "reveal":
+        options = [
+            Option(id="sold", label="I'm sold!", insight="Let's lock it in"),
+            Option(id="compare", label="Compare top 2", insight="Side by side breakdown"),
+            Option(id="start_over", label="Start over", insight="Back to square one"),
+        ]
+    else:
+        raw_options = dest_data.get("options", [])
+        options = []
+        for o in raw_options:
+            if isinstance(o, dict):
+                options.append(Option(
+                    id=o.get("id", o.get("label", "opt")),
+                    label=o.get("label", "Option"),
+                    insight=o.get("insight", ""),
+                ))
 
-    if not options:
-        fallback = FALLBACK_TURNS.get(phase, FALLBACK_TURNS["narrowing"])
-        options = fallback.options
+        if not options:
+            fallback = FALLBACK_TURNS.get(phase, FALLBACK_TURNS["narrowing"])
+            options = fallback.options
 
     return ConversationTurn(
         phase=phase,
