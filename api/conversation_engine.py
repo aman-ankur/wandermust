@@ -18,6 +18,19 @@ from config import settings
 
 logger = logging.getLogger("wandermust.conversation_engine")
 
+
+def build_conversation_summary(messages: List[Dict[str, str]], max_turns: int = 6) -> str:
+    """Build a compact conversation summary from recent messages."""
+    if not messages:
+        return ""
+    recent = messages[-max_turns:]
+    lines = []
+    for msg in recent:
+        role = "You" if msg["role"] == "assistant" else "User"
+        lines.append(f"{role}: {msg['content']}")
+    return "Recent conversation:\n" + "\n".join(lines)
+
+
 _personality_llm = None
 _destination_llm = None
 
@@ -43,19 +56,24 @@ def _get_destination_llm():
 
 
 PERSONALITY_PROMPT = """You are a well-traveled friend who's been to 60+ countries. Opinionated, insightful, honest.
+You give advice that feels personal, not generic. Reference specific things the user said earlier.
 
 User context: {known_facts_summary}
+{conversation_history}
 {knowledge_context}
 
 Topic to ask about: {question_hint}
 Options (keep these EXACT labels, do NOT change them): {option_labels}
 User's last answer: {last_answer}
 
+Personalize option_insights using what you know about this user. Reference their specific preferences, not generic descriptions.
+
 Return ONLY valid JSON:
-{{"reaction": "1-2 specific sentences reacting to their last answer, or null if first turn", "question": "natural phrasing of the question", "option_insights": ["one short insight per option, same order as options"]}}"""
+{{"reaction": "1-2 specific sentences reacting to their last answer referencing what they actually said, or null if first turn", "question": "natural phrasing of the question that flows from the conversation", "option_insights": ["one personalized insight per option, same order as options"]}}"""
 
 
 DESTINATION_PROMPT = """You are a well-traveled friend who's been to 60+ countries. Opinionated, insightful, honest.
+You know this user's preferences from your conversation and tailor every suggestion to them.
 
 User profile:
 {profile_summary}
@@ -63,13 +81,14 @@ User profile:
 Trip preferences:
 {trip_summary}
 
+{conversation_history}
 {knowledge_context}
 
 Phase: {phase}
 {phase_instructions}
 
 Return ONLY valid JSON:
-{{"reaction": "1-2 sentences", "question": "your question or presentation", "thinking": "your reasoning about why these destinations fit", "destination_hints": [{{"name": "City, Country", "hook": "2-3 sentence pitch", "match_reason": "why it fits their preferences", "budget_hint": "rough budget estimate"}}], "options": [{{"id": "id", "label": "Label", "insight": "1 sentence"}}]}}"""
+{{"reaction": "1-2 sentences connecting to what they told you", "question": "your question or presentation", "thinking": "your reasoning about why these destinations fit THIS specific user", "destination_hints": [{{"name": "City, Country", "hook": "2-3 sentence pitch referencing their interests", "match_reason": "why it fits their stated preferences", "budget_hint": "rough budget estimate in their currency"}}], "options": [{{"id": "id", "label": "Label", "insight": "1 sentence"}}]}}"""
 
 DESTINATION_PHASE_INSTRUCTIONS = {
     "narrowing": (
@@ -130,6 +149,7 @@ def generate_personality(
     known_facts: Dict[str, Any],
     knowledge_context: str = "",
     last_answer: Optional[str] = None,
+    messages: Optional[List[Dict[str, str]]] = None,
 ) -> Dict[str, Any]:
     """Ask the LLM to phrase a question with personality.
 
@@ -138,9 +158,11 @@ def generate_personality(
     """
     facts_summary = ", ".join(f"{k}: {v}" for k, v in known_facts.items()) if known_facts else "none yet"
     labels_str = ", ".join(option_labels)
+    conversation_history = build_conversation_summary(messages or [])
 
     prompt = PERSONALITY_PROMPT.format(
         known_facts_summary=facts_summary,
+        conversation_history=conversation_history,
         knowledge_context=knowledge_context or "",
         question_hint=question_hint,
         option_labels=labels_str,
@@ -184,10 +206,12 @@ def generate_destinations(
     profile_summary = json.dumps(profile, indent=2) if profile else "{}"
     trip_summary = json.dumps(known_facts, indent=2)
     phase_instructions = DESTINATION_PHASE_INSTRUCTIONS.get(phase, "")
+    conversation_history = build_conversation_summary(messages or [])
 
     prompt = DESTINATION_PROMPT.format(
         profile_summary=profile_summary,
         trip_summary=trip_summary,
+        conversation_history=conversation_history,
         knowledge_context=knowledge_context or "",
         phase=phase,
         phase_instructions=phase_instructions,
