@@ -17,6 +17,7 @@ from api.conversation_controller import (
     build_trip_intent_from_facts,
     get_topic,
     parse_answer,
+    pick_bonus_topic,
     pick_next_topic,
     should_transition,
 )
@@ -372,3 +373,56 @@ class TestTopicRegistry:
         assert get_topic("passport").key == "passport"
         assert get_topic("interests").multi_select is True
         assert get_topic("nonexistent") is None
+
+
+# ── Min-Turn Guards ─────────────────────────────────────────────────────
+
+class TestMinTurnGuards:
+    def test_transition_blocked_by_min_turns(self):
+        """Even with all required facts, transition should wait for min turns."""
+        facts = {"passport": "Indian", "budget_level": "Mid-range", "travel_style": "Mix of everything"}
+        result = should_transition("profile", facts, turn_count=1)
+        assert result is None
+
+    def test_transition_allowed_after_min_turns(self):
+        facts = {"passport": "Indian", "budget_level": "Mid-range", "travel_style": "Mix of everything"}
+        result = should_transition("profile", facts, turn_count=2)
+        assert result == "discovery"
+
+    def test_discovery_transition_blocked_by_min_turns(self):
+        facts = {"timing": "Flexible", "companions": "Solo", "interests": ["Food"]}
+        result = should_transition("discovery", facts, turn_count=1)
+        assert result is None
+
+    def test_discovery_transition_allowed(self):
+        facts = {"timing": "Flexible", "companions": "Solo", "interests": ["Food"]}
+        result = should_transition("discovery", facts, turn_count=2)
+        assert result == "narrowing"
+
+    def test_safety_net_still_forces_transition(self):
+        """Max turns safety net should override min-turn requirement."""
+        facts = {"passport": "Indian"}  # Not all required, but max turns reached
+        result = should_transition("profile", facts, turn_count=5)
+        assert result == "discovery"
+
+
+# ── Bonus Topics ────────────────────────────────────────────────────────
+
+class TestPickBonusTopic:
+    def test_pick_bonus_topic_profile(self):
+        """No non-required profile topics exist."""
+        facts = {"passport": "Indian", "budget_level": "Mid-range", "travel_style": "Mix"}
+        bonus = pick_bonus_topic(facts, "profile")
+        assert bonus is None
+
+    def test_pick_bonus_topic_discovery(self):
+        """deal_breakers is not required, should be offered as bonus."""
+        facts = {"timing": "Flexible", "companions": "Solo", "interests": ["Food"]}
+        bonus = pick_bonus_topic(facts, "discovery")
+        assert bonus is not None
+        assert bonus.key == "deal_breakers"
+
+    def test_pick_bonus_topic_all_filled(self):
+        facts = {"timing": "Flexible", "companions": "Solo", "interests": ["Food"], "deal_breakers": ["None"]}
+        bonus = pick_bonus_topic(facts, "discovery")
+        assert bonus is None
