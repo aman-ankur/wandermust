@@ -191,6 +191,10 @@ def should_transition(
             logger.warning(f"Discovery safety net: forcing transition after {turn_count} turns")
             return "narrowing"
 
+    elif phase == "narrowing":
+        if turn_count >= settings.discovery_v2_min_narrowing_turns:
+            return "reveal"
+
     return None
 
 
