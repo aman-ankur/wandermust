@@ -219,6 +219,14 @@ if mode == "🔍 Discover Where":
             _start_session()
             st.rerun()
         else:
+            # Verify backend session still exists (survives hot reload)
+            store = _get_session_store()
+            if store.get(st.session_state.v2_session_id) is None:
+                st.session_state.v2_session_id = None
+                st.session_state.v2_turns = []
+                st.session_state.v2_current_turn = None
+                _start_session()
+                st.rerun()
             render_turn_history()
             turn = st.session_state.v2_current_turn
             if turn:

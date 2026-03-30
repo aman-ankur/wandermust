@@ -119,8 +119,10 @@ DESTINATION_PHASE_INSTRUCTIONS = {
         "Options should be reactions: 'Tell me more about X', 'Love these!', 'Show me different options', 'Not quite right'."
     ),
     "reveal": (
-        "Present final 3-5 curated picks. Each gets a rich hook (2-3 sentences), "
-        "budget estimate, and one surprising insight. "
+        "The user has narrowed down their interests from the previous suggestions. "
+        "Look at what they said in the conversation to understand which destinations they liked. "
+        "Present final 3-5 curated picks focused on what excited them. Each gets a rich hook (2-3 sentences), "
+        "a detailed budget breakdown in their currency, best time to visit, and one surprising insider tip. "
         "Options: 'I'm sold on X!', 'Compare top 2', 'Start over'."
     ),
 }

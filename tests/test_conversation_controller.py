@@ -153,8 +153,12 @@ class TestShouldTransition:
         result = should_transition("discovery", facts, 6)
         assert result == "narrowing"
 
-    def test_narrowing_never_auto_transitions(self):
-        result = should_transition("narrowing", {}, 10)
+    def test_narrowing_transitions_to_reveal(self):
+        result = should_transition("narrowing", {}, 1)
+        assert result == "reveal"
+
+    def test_narrowing_stays_below_min_turns(self):
+        result = should_transition("narrowing", {}, 0)
         assert result is None
 
     def test_reveal_never_auto_transitions(self):
