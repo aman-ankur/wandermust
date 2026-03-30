@@ -29,6 +29,7 @@ from api.conversation_controller import (
     build_profile_from_facts,
     build_trip_intent_from_facts,
 )
+from api.intent_extractor import extract_facts_from_text
 from api.conversation_engine import (
     FALLBACK_TURNS,
     generate_destinations,
@@ -219,6 +220,18 @@ def respond(request: DiscoveryRespondRequest) -> Dict[str, Any]:
 
     store.add_message(request.session_id, role="user", content=request.answer)
     session = store.get(request.session_id)
+
+    # Extract additional facts from free text (runs pre-controller)
+    if request.answer and not request.option_ids:
+        extracted = extract_facts_from_text(
+            request.answer,
+            session.get("known_facts", {}),
+        )
+        if extracted:
+            current_facts = dict(session.get("known_facts", {}))
+            current_facts.update(extracted)
+            store.update(request.session_id, known_facts=current_facts)
+            session = store.get(request.session_id)
 
     ctrl = build_controller_turn(
         session,
