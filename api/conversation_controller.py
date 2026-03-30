@@ -4,6 +4,8 @@ Manages topic selection, answer parsing, phase transitions, and fact tracking.
 The LLM personality layer only phrases questions; it cannot break the flow.
 """
 import logging
+
+from config import settings
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -115,6 +117,18 @@ def pick_next_topic(known_facts: Dict[str, Any], phase: str) -> Optional[TopicCo
     return None
 
 
+def pick_bonus_topic(known_facts: Dict[str, Any], phase: str) -> Optional[TopicConfig]:
+    """Pick a non-required unfilled topic as a bonus question when min turns aren't met.
+
+    Returns None if all topics for the phase are filled.
+    """
+    required = REQUIRED_PROFILE_FACTS if phase == "profile" else REQUIRED_DISCOVERY_FACTS
+    for topic in TOPIC_REGISTRY:
+        if topic.phase == phase and topic.key not in known_facts and topic.key not in required:
+            return topic
+    return None
+
+
 def parse_answer(
     topic: TopicConfig,
     option_ids: Optional[List[str]] = None,
@@ -158,18 +172,21 @@ def should_transition(
 ) -> Optional[str]:
     """Check if we should transition to the next phase.
 
-    Returns the new phase name, or None to stay in current phase.
+    Requires both: (1) required facts filled AND (2) minimum turns reached.
+    Safety net forces transition after max turns regardless.
     """
     if phase == "profile":
         if REQUIRED_PROFILE_FACTS.issubset(known_facts.keys()):
-            return "discovery"
+            if turn_count >= settings.discovery_v2_min_profile_turns:
+                return "discovery"
         if turn_count >= MAX_PROFILE_TURNS:
             logger.warning(f"Profile safety net: forcing transition after {turn_count} turns")
             return "discovery"
 
     elif phase == "discovery":
         if REQUIRED_DISCOVERY_FACTS.issubset(known_facts.keys()):
-            return "narrowing"
+            if turn_count >= settings.discovery_v2_min_discovery_turns:
+                return "narrowing"
         if turn_count >= MAX_DISCOVERY_TURNS:
             logger.warning(f"Discovery safety net: forcing transition after {turn_count} turns")
             return "narrowing"
@@ -221,6 +238,10 @@ def build_controller_turn(
         phase = new_phase
 
     next_topic = pick_next_topic(known_facts, phase)
+
+    if next_topic is None and phase in ("profile", "discovery"):
+        # All required topics filled but min turns not reached — try bonus
+        next_topic = pick_bonus_topic(known_facts, phase)
 
     return ControllerResult(
         topic=next_topic,
