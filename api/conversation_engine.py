@@ -18,17 +18,28 @@ from config import settings
 
 logger = logging.getLogger("wandermust.conversation_engine")
 
-_llm = None
+_personality_llm = None
+_destination_llm = None
 
 
-def _get_llm():
-    global _llm
-    if _llm is None:
-        _llm = get_llm(settings.discovery_v2_model).bind(
+def _get_personality_llm():
+    global _personality_llm
+    if _personality_llm is None:
+        _personality_llm = get_llm(settings.discovery_v2_personality_model).bind(
+            response_format={"type": "json_object"},
+            max_tokens=512,
+        )
+    return _personality_llm
+
+
+def _get_destination_llm():
+    global _destination_llm
+    if _destination_llm is None:
+        _destination_llm = get_llm(settings.discovery_v2_destination_model).bind(
             response_format={"type": "json_object"},
             max_tokens=1024,
         )
-    return _llm
+    return _destination_llm
 
 
 PERSONALITY_PROMPT = """You are a well-traveled friend who's been to 60+ countries. Opinionated, insightful, honest.
@@ -137,7 +148,7 @@ def generate_personality(
     )
 
     try:
-        llm = _get_llm()
+        llm = _get_personality_llm()
         logger.info(f"ConversationEngine: generating personality (hint={question_hint})")
         t0 = time.perf_counter()
         response = llm.invoke(prompt)
@@ -183,7 +194,7 @@ def generate_destinations(
     )
 
     try:
-        llm = _get_llm()
+        llm = _get_destination_llm()
         logger.info(f"ConversationEngine: generating destinations (phase={phase})")
         t0 = time.perf_counter()
         response = llm.invoke(prompt)
