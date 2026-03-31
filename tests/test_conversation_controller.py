@@ -36,8 +36,14 @@ class TestPickNextTopic:
         assert topic is not None
         assert topic.key == "budget_level"
 
-    def test_all_profile_filled_returns_none(self):
+    def test_all_required_profile_filled_returns_bonus(self):
         facts = {"passport": "US", "budget_level": "Mid-range", "travel_style": "Adventure & outdoors"}
+        topic = pick_next_topic(facts, "profile")
+        assert topic is not None
+        assert topic.key == "trip_duration"
+
+    def test_all_profile_filled_returns_none(self):
+        facts = {"passport": "US", "budget_level": "Mid-range", "travel_style": "Adventure & outdoors", "trip_duration": "About a week"}
         topic = pick_next_topic(facts, "profile")
         assert topic is None
 
@@ -414,8 +420,15 @@ class TestMinTurnGuards:
 
 class TestPickBonusTopic:
     def test_pick_bonus_topic_profile(self):
-        """No non-required profile topics exist."""
+        """trip_duration is non-required, should be offered as bonus."""
         facts = {"passport": "Indian", "budget_level": "Mid-range", "travel_style": "Mix"}
+        bonus = pick_bonus_topic(facts, "profile")
+        assert bonus is not None
+        assert bonus.key == "trip_duration"
+
+    def test_pick_bonus_topic_profile_all_filled(self):
+        """All profile topics filled, no bonus available."""
+        facts = {"passport": "Indian", "budget_level": "Mid-range", "travel_style": "Mix", "trip_duration": "About a week"}
         bonus = pick_bonus_topic(facts, "profile")
         assert bonus is None
 

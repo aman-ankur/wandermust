@@ -55,6 +55,16 @@ TOPIC_REGISTRY: List[TopicConfig] = [
             {"id": "mix", "label": "Mix of everything"},
         ],
     ),
+    TopicConfig(
+        "trip_duration", "profile", "how long they typically like to travel",
+        [
+            {"id": "weekend", "label": "Long weekend (3-4 days)"},
+            {"id": "week", "label": "About a week"},
+            {"id": "two_weeks", "label": "Two weeks"},
+            {"id": "extended", "label": "Extended trip (3+ weeks)"},
+            {"id": "flexible", "label": "Depends on the destination"},
+        ],
+    ),
     # Discovery phase
     TopicConfig(
         "timing", "discovery", "when they plan to travel",
@@ -246,6 +256,18 @@ def build_controller_turn(
     if next_topic is None and phase in ("profile", "discovery"):
         # All required topics filled but min turns not reached — try bonus
         next_topic = pick_bonus_topic(known_facts, phase)
+
+    # If still no topic and we haven't transitioned yet, force transition
+    # (handles case where intent extraction fills ALL topics at once)
+    if next_topic is None and not phase_changed and phase in ("profile", "discovery"):
+        forced_phase = "discovery" if phase == "profile" else "narrowing"
+        logger.info(f"All {phase} topics filled, forcing transition to {forced_phase}")
+        phase = forced_phase
+        phase_changed = True
+        # Pick next topic for the new phase
+        next_topic = pick_next_topic(known_facts, phase)
+        if next_topic is None and phase == "discovery":
+            next_topic = pick_bonus_topic(known_facts, phase)
 
     return ControllerResult(
         topic=next_topic,

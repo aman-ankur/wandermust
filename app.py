@@ -172,13 +172,14 @@ if mode == "🔍 Discover Where":
                     st.session_state.v2_multi_selected = set()
                     _submit_answer(answer, option_ids=selected_ids)
         else:
-            cols = st.columns(min(len(turn.options), 4))
-            for j, opt in enumerate(turn.options):
-                with cols[j % len(cols)]:
-                    label = f"{opt.emoji or ''} {opt.label}".strip()
-                    if st.button(label, key=f"v2_opt_{opt.id}", use_container_width=True):
-                        _submit_answer(opt.label, option_ids=[opt.id])
-                    st.caption(opt.insight)
+            if turn.options:
+                cols = st.columns(min(len(turn.options), 4))
+                for j, opt in enumerate(turn.options):
+                    with cols[j % len(cols)]:
+                        label = f"{opt.emoji or ''} {opt.label}".strip()
+                        if st.button(label, key=f"v2_opt_{opt.id}", use_container_width=True):
+                            _submit_answer(opt.label, option_ids=[opt.id])
+                        st.caption(opt.insight)
 
         if turn.can_free_text:
             custom = st.chat_input("Type your own answer...")
