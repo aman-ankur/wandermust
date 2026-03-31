@@ -13,7 +13,7 @@ from config import settings
 logger = logging.getLogger("wandermust.intent_extractor")
 
 VALID_TOPIC_KEYS = {
-    "passport", "budget_level", "travel_style",
+    "passport", "budget_level", "travel_style", "trip_duration",
     "timing", "companions", "interests", "deal_breakers",
 }
 
@@ -23,6 +23,7 @@ Map to these topics (skip any not clearly mentioned):
 - passport: one of ["Indian", "US", "UK", "EU/Schengen", "Other"]
 - budget_level: one of ["Budget-friendly", "Mid-range", "Comfortable", "Luxury"]
 - travel_style: one of ["Adventure & outdoors", "Culture & history", "Relaxation & beaches", "Food & culinary", "Mix of everything"]
+- trip_duration: one of ["Long weekend (3-4 days)", "About a week", "Two weeks", "Extended trip (3+ weeks)", "Depends on the destination"]
 - timing: one of ["Next 1-2 months", "3-6 months out", "6+ months out", "Flexible"]
 - companions: one of ["Solo", "With partner", "With friends", "Family with kids"]
 - interests: list from ["Street food & local cuisine", "Nature & hiking", "History & architecture", "Nightlife & bars", "Beaches & water sports", "Markets & shopping"]

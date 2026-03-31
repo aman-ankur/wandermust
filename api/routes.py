@@ -249,6 +249,59 @@ def respond(request: DiscoveryRespondRequest) -> Dict[str, Any]:
 
     new_turn_count = session["turn_count"] + 1
 
+    # Handle reveal phase special actions (deterministic options)
+    if session["phase"] == "reveal" and request.option_ids:
+        option_id = request.option_ids[0]
+        if option_id == "sold":
+            # User confirmed selection - mark phase complete
+            return {
+                "session_id": request.session_id,
+                "turn": {
+                    "phase": "reveal",
+                    "reaction": "Great choice! You're all set.",
+                    "question": "Click 'Select' on your preferred destination above to continue to the optimizer.",
+                    "options": [],
+                    "multi_select": False,
+                    "can_free_text": False,
+                    "destination_hints": None,
+                    "thinking": None,
+                    "phase_complete": True,
+                    "topic": None,
+                },
+            }
+        elif option_id == "compare":
+            # User wants comparison - regenerate with comparison focus
+            pass  # Fall through to normal destination generation
+        elif option_id == "start_over":
+            # Reset session to profile phase
+            store.update(
+                request.session_id,
+                phase="profile",
+                turn_count=0,
+                known_facts={},
+                messages=[],
+            )
+            # Return first turn
+            new_session = store.get(request.session_id)
+            from api.conversation_controller import build_first_turn
+            ctrl = build_first_turn(new_session)
+            profile = new_session.get("profile", {})
+            knowledge_ctx = _build_knowledge_context(profile, ctrl.known_facts)
+            option_labels = [o["label"] for o in ctrl.option_templates]
+            personality = generate_personality(
+                question_hint=ctrl.topic.question_hint,
+                option_labels=option_labels,
+                known_facts=ctrl.known_facts,
+                knowledge_context=knowledge_ctx,
+                messages=[],
+            )
+            turn = _assemble_turn(ctrl, personality)
+            store.add_message(request.session_id, role="assistant", content=turn.question)
+            store.update(request.session_id, turn_count=1, last_topic_key=ctrl.topic.key)
+            total_ms = (time.perf_counter() - t_start) * 1000
+            logger.info(f"[PERF] /respond total: {total_ms:.0f}ms (start_over)")
+            return {"session_id": request.session_id, "turn": turn.model_dump()}
+
     if ctrl.phase in ("narrowing", "reveal"):
         profile = session.get("profile", {})
         knowledge_ctx = _build_knowledge_context(profile, ctrl.known_facts)
